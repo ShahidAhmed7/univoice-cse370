@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+</head>
+<body>
+    <form id = "login-form">
+        <input type="text" name="username" id = "username" placeholder="Username"><br>
+        <input type="password" name="password" id = "password" placeholder="Password"><br>
+        <button type="submit" id = "submit">Login</button>
+        <p>
+            If you don't have an account then register first
+            <button onclick="window.location.href='/register'">Register</button>
+        </p>
+        <p id = "box"></p>
+    </form>
+
+    <script>
+        const form = document.getElementById("login-form");
+        form.addEventListener("submit",async(e) =>{
+            e.preventDefault();
+            const data = {
+                username : document.getElementById("username").value,
+                password : document.getElementById("password").value
+            };
+        const response = await fetch("/api/login",{
+            method : "POST",
+            headers : {"content-type" : "application/json" },
+            body : JSON.stringify(data)
+        });
+        console.log(response)
+        if (response.ok){
+            result = await response.json();
+            window.location.href = result.redirect_to;
+        }
+        else {
+            const result = await response.json();
+            const box = document.getElementById("box");
+            box.innerText = result.message;
+        }
+        })
+
+    </script>
+
+    
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+</head>
+<body>
+    <h2>Register</h2>
+    <form id = "registration-form">
+        <label for="name">Name:</label><br>
+        <input type="text" name="name" id = "name" required><br>
+
+        <label for="username">Username:</label><br>
+        <input type="text" name="username" id = "username" required><br>
+
+        <label for="email">Email:</label><br>
+        <input type="email" name="email" id = "email" required><br>
+
+        <label for="password">Password:</label><br>
+        <input type="password" name="password" id = "password" required><br>
+
+        <button type="submit" id = "submit" >Register</button>
+
+        <p id = "box"></p>
+
+        <script>
+            const form = document.getElementById("registration-form");
+            form.addEventListener("submit",async(e) =>{
+                e.preventDefault()
+                const data = {
+                    name : document.getElementById("name").value,
+                    username : document.getElementById("username").value,
+                    email : document.getElementById("email").value,
+                    password : document.getElementById("password").value,
+                    role : "student"
+                };
+                const response = await fetch("/api/register",{
+                    method : "POST",
+                    headers : {
+                        "content-type" : "application/json"
+                    },
+                    body : JSON.stringify(data)
+                });
+                const result = await response.json();
+                const box = document.getElementById("box")
+                box.innerText = result.message
+            })
+        </script>
+</body>
+</html>
