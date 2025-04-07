@@ -14,6 +14,16 @@ templates = Jinja2Templates(directory="templates")
 
 app.include_router(auth.router)
 
+@app.get("/")
+def main_page(request: Request):
+    session = request.cookies.get("session")
+    if session:
+        return RedirectResponse("/home")
+    else :
+        return RedirectResponse("/login")
+
+
+
 @app.get("/register")
 def display_registration_page(request : Request):
     return templates.TemplateResponse("register.html", {"request": request})
