@@ -32,7 +32,7 @@ def login_user(user: UserLogin):
                 content= {"message": "Login successful. Directing to home page...",
                         "redirect_to": "/home"}
                 )
-            response.set_cookie("session", token, httponly = True , path = "/", max_age = 60*60*24)
+            response.set_cookie("session", token, httponly=True, secure=True, samesite="Lax")
             return response
         else: 
             return JSONResponse(
@@ -45,7 +45,7 @@ def login_user(user: UserLogin):
         content = {'message' : "Username doesn't exist"}
     )
 
-@router.post('/logout')
+@router.post('/api/logout')
 def logout_user():
     response = JSONResponse(
     content={"message": "Logged out successfully"},

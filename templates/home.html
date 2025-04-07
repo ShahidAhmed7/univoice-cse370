@@ -10,15 +10,15 @@
     <button id = "logout">Log Out</button>
     
     <script>
-        const logout_button = document.getElementById("logout")
-        
-        logout_button.addEventListener("click", async () => {
-            const response = await fetch("/logout", {method: "POST"});
+        const logout_button = document.getElementById("logout");
 
+        logout_button.addEventListener("click", async () => {
+            const response = await fetch("/api/logout", { method: "POST" });
             if (response.ok) {
                 window.location.href = "/login";  
             }
-    });
+        });  // ✅ <-- this was missing
+
     </script>
 </body>
 </html>
