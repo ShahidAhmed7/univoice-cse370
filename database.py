@@ -93,8 +93,17 @@ def get_all_posts(status=None, sort="latest"):
     return posts
 
 
+from uuid import UUID
+from sqlalchemy import text
+from utils import format_time_ago
+
 def get_post_by_id(post_id):
-    post_id = UUID(post_id) 
+    try:
+        post_id = UUID(post_id)
+    except ValueError:
+        print("Invalid UUID format:", post_id)
+        return False
+
     with engine.connect() as conn:
         query = text("""
             SELECT 
@@ -104,22 +113,32 @@ def get_post_by_id(post_id):
                 posts.status,
                 posts.created_at,
                 users.username,
-                COUNT(DISTINCT upvotes.id) AS upvotes,
-                COUNT(DISTINCT comments.id) AS comments
+                COALESCE(COUNT(DISTINCT upvotes.id), 0) AS upvotes,
+                COALESCE(COUNT(DISTINCT comments.id), 0) AS comments
             FROM posts
             JOIN users ON posts.user_id = users.id
             LEFT JOIN upvotes ON upvotes.post_id = posts.id
             LEFT JOIN comments ON comments.post_id = posts.id
             WHERE posts.id = :post_id
-            GROUP BY posts.id, users.username
+            GROUP BY posts.id, posts.title, posts.content, posts.status, posts.created_at, users.username
         """)
         result = conn.execute(query, {"post_id": post_id}).mappings().all()
-    
+
     if len(result) == 0:
-        return False 
+        return False
+
+    post_dict = dict(result[0])
     
-    post_dict = dict(result[0])  
-    post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
-    post_dict.pop("created_at", None)  # Safely remove created_at
-    post_dict["id"] = str(post_dict["id"])  # Convert UUID to string
+    # Convert UUIDs to string
+    post_dict["id"] = str(post_dict["id"])
+
+    # Format time ago
+    if "created_at" in post_dict:
+        post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
+        post_dict.pop("created_at", None)
+    else:
+        post_dict["time_ago"] = "Unknown"
+
     return post_dict
+
+

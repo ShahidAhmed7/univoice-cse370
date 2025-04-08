@@ -45,18 +45,16 @@ def get_posts(status : str, sort : str):
         )
 
 @router.get("/api/posts/{post_id}")
-def get_post(post_id: UUID):
-    post = get_post_by_id(post_id)
-    if post:
-        return JSONResponse(
-            status_code = 200,
-            content = {"post" : post}
-        )
-    else :
-        return JSONResponse(
-            status_code = 400,
-            content = {"message" : "Failed to get posts"}
-        )
+def get_post(post_id: str):
+    try:
+        post = get_post_by_id(post_id)
+        if post:
+            return JSONResponse(status_code=200, content={"post": post})
+        return JSONResponse(status_code=404, content={"message": "Post not found"})
+    except Exception as e:
+        print("🔥 API error:", e)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
                                 
     
