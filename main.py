@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from utils import serializer
 
-from routes import auth 
+from routes import auth, posts 
 
 app = FastAPI()
 
@@ -13,6 +13,8 @@ templates = Jinja2Templates(directory="templates")
 
 
 app.include_router(auth.router)
+app.include_router(posts.router)
+
 
 @app.get("/")
 def main_page(request: Request):
@@ -49,6 +51,20 @@ def display_home(request: Request):
         return RedirectResponse("/login")
     
     
+@app.get("/new-post")
+def display_post_page(request: Request):
+    session = request.cookies.get("session")
+    if not session:
+        return RedirectResponse("/login")
+    
+    try :
+        data = serializer.loads(session)
+        username = data.get("username")
+        role = data.get("role")
+        return templates.TemplateResponse("new-post.html",{"request" : request, "username": username, "role" : role})
+    except Exception as e:
+        print("Invalid session:", e)
+        return RedirectResponse("/login")
     
 
 

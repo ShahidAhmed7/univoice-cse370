@@ -37,5 +37,34 @@ def get_user_data(username):
             return False 
         return result[0]
 
+def insert_post(username, title, content):
+    with engine.connect() as conn:
+        trans = conn.begin()
+        try:
+            user_query = text("SELECT id FROM users WHERE username = :username")
+            user_result = conn.execute(user_query, {"username": username}).fetchone()
 
+            if not user_result:
+                raise Exception("User not found")
+
+            user_id = user_result[0]  
+
+            insert_query = text("""
+                INSERT INTO posts (user_id, title, content, status, created_at)
+                VALUES (:user_id, :title, :content, 'pending', NOW())
+            """)
+            conn.execute(insert_query, {
+                "user_id": user_id,
+                "title": title,
+                "content": content
+            })
+
+            trans.commit()
+            print("You posted successfully")
+            return True
+        
+        except Exception as e:
+            print(" Error inserting post:", e)
+            trans.rollback()
+            return False
 

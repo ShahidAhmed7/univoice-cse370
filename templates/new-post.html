@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Post</title>
+</head>
+<body>
+    <h1>Create a New Post</h1>
+    <form id = "new-post-form">
+        <label for="title">Title:</label><br>
+        <input type="text" id="title" name="title" required><br><br>
+
+        <label for="content">Content:</label><br>
+        <textarea id="content" name="content" required></textarea><br><br>
+
+        <button type="submit">Submit</button>
+    </form>
+    <script>
+        const user = "{{username}}";
+        document.getElementById('new-post-form').addEventListener('submit', async(e)=>{
+            e.preventDefault();
+            const data = {
+                username : user,
+                title : document.getElementById('title').value,
+                content : document.getElementById('content').value
+            }
+            const response = await fetch("/api/new-post", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(data),
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                alert(error.message);
+                return;
+            }
+            const result = await response.json();
+            alert(result.message);
+            window.location.href = "/home";
+        })
+        
+    </script>
+</body>
+</html>

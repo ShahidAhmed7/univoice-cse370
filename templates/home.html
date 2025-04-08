@@ -7,6 +7,7 @@
 </head>
 <body>
     <h2>Welcome to UNIVOICE, {{username}}</h2>
+    <button id = "new-post">Create a New Post</button>
     <button id = "logout">Log Out</button>
     
     <script>
@@ -17,7 +18,12 @@
             if (response.ok) {
                 window.location.href = "/login";  
             }
-        });  // ✅ <-- this was missing
+        });  
+
+        const new_post_button = document.getElementById("new-post");
+        new_post_button.addEventListener("click", () => {
+            window.location.href = "/new-post";
+        });
 
     </script>
 </body>
