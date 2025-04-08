@@ -157,14 +157,14 @@
       document.querySelectorAll(".upvote-button").forEach(button => {
         button.addEventListener("click", (e) => {
           const postId = e.target.dataset.id;
-          console.log("⬆️ Upvote clicked for post:", postId);
+          console.log("Upvote clicked for post:", postId);
         });
       });
 
       document.querySelectorAll(".comment-button").forEach(button => {
         button.addEventListener("click", (e) => {
           const postId = e.target.dataset.id;
-          console.log("💬 Comment clicked for:", postId);
+          console.log("Comment clicked for:", postId);
         });
       });
     }

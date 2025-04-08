@@ -56,7 +56,7 @@ def get_post(post_id: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-                                
+                           
     
     
 
