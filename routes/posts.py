@@ -56,6 +56,21 @@ def get_post(post_id: str):
         print("🔥 API error:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+# Add this to routes/posts.py after the other routes
+
+@router.get("/api/upvote/check/{post_id}")
+def check_upvote(post_id: str, username: str = Query(...)):
+    try:
+        post_id = UUID(post_id)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"message": "Invalid post ID"})
+
+    user_id = get_user_id(username)
+    if not user_id:
+        return JSONResponse(status_code=404, content={"message": "User not found"})
+
+    upvoted = has_upvoted(post_id, user_id)
+    return JSONResponse(status_code=200, content={"upvoted": upvoted})
 
 @router.post("/api/upvote/{post_id}")
 def upvote_toggle(post_id: str, username: str = Query(...)):
@@ -70,10 +85,10 @@ def upvote_toggle(post_id: str, username: str = Query(...)):
 
     if has_upvoted(post_id, user_id):
         removed = remove_upvote(post_id, user_id)
-        return JSONResponse(status_code=200, content={"message": "Upvote removed", "success": removed})
+        return JSONResponse(status_code=200, content={"message": "Removed"})
     else:
         added = add_upvote(post_id, user_id)
-        return JSONResponse(status_code=200, content={"message": "Upvoted", "success": added})
+        return JSONResponse(status_code=200, content={"message": "Upvoted"})
 
                            
     

@@ -188,3 +188,10 @@ def remove_upvote(post_id,user_id):
         trans.commit()
         return result.rowcount > 0
 
+# Add this function to database.py
+def has_user_upvoted(post_id, username):
+    user_id = get_user_id(username)
+    if not user_id:
+        return False
+    
+    return has_upvoted(post_id, user_id)

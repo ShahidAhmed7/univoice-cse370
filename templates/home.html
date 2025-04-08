@@ -52,6 +52,19 @@
       background-color: #4F46E5;
       color: white;
     }
+    
+    /* Add styles for upvoted state */
+    .upvoted {
+      background-color: #10B981;
+      color: white;
+      border-color: #10B981;
+    }
+    
+    .upvoted:hover {
+      background-color: #059669;
+      color: white;
+      border-color: #059669;
+    }
   </style>
 </head>
 <body>
@@ -103,9 +116,38 @@
       window.location.href = "/new-post";
     });
 
-    function createPostCard(post) {
+    // Store upvote status for all posts
+    const upvoteStatus = {};
+    const username = "{{ username }}";
+
+    async function checkUpvoteStatus(postId) {
+      try {
+        const response = await fetch(`/api/upvote/check/${postId}?username=${username}`);
+        if (response.ok) {
+          const data = await response.json();
+          upvoteStatus[postId] = data.upvoted;
+          return data.upvoted;
+        }
+        return false;
+      } catch (err) {
+        console.error("Error checking upvote status:", err);
+        return false;
+      }
+    }
+
+    function createPostCard(post, hasUpvoted = false) {
       const card = document.createElement("div");
       card.classList.add("post-card");
+      card.dataset.id = post.id;
+
+      // Store the upvote status in our tracking object
+      upvoteStatus[post.id] = hasUpvoted;
+      
+      const upvoteButtonClass = hasUpvoted 
+        ? "btn btn-sm upvote-button upvoted" 
+        : "btn btn-outline-success btn-sm upvote-button";
+        
+      const upvoteButtonText = hasUpvoted ? "Upvoted" : "Upvote";
 
       card.innerHTML = `
         <h5 class="mb-2">${post.title}</h5>
@@ -113,13 +155,13 @@
         <div class="d-flex justify-content-between align-items-center mt-3">
           <div>
             <span class="badge bg-secondary status-badge">${post.status}</span>
-            <span class="badge bg-success ms-2">⬆ ${post.upvotes}</span>
+            <span class="badge bg-success ms-2 upvote-count" data-id="${post.id}">⬆ ${post.upvotes}</span>
             <span class="badge bg-info text-dark ms-2">💬 ${post.comments}</span>
           </div>
           <small class="post-meta">Posted by <strong>${post.username}</strong> • ${post.time_ago}</small>
         </div>
         <div class="mt-3 d-flex gap-2">
-          <button class="btn btn-outline-success btn-sm upvote-button" data-id="${post.id}">Upvote</button>
+          <button class="${upvoteButtonClass}" data-id="${post.id}">${upvoteButtonText}</button>
           <button class="btn btn-outline-brand btn-sm comment-button" data-id="${post.id}">Comment</button>
         </div>`;
 
@@ -143,7 +185,9 @@
           const postRes = await fetch(`/api/posts/${p.id}`);
           if (postRes.ok) {
             const detailed = await postRes.json();
-            const card = createPostCard(detailed.post);
+            // Check if this post has been upvoted (from our client-side tracking)
+            const hasUpvoted = await checkUpvoteStatus(detailed.post.id);
+            const card = createPostCard(detailed.post, hasUpvoted);
             postsContainer.appendChild(card);
           }
         }
@@ -154,22 +198,47 @@
     }
 
     function attachPostActions() {
-      const user = "{{ username }}";
       document.querySelectorAll(".upvote-button").forEach(button => {
         button.addEventListener("click", async (e) => {
           const postId = e.target.dataset.id;
-          console.log("Upvote clicked for post:", postId);
-          console.log("User:", user);
-
+          const isUpvoted = upvoteStatus[postId] || false;
+          
           try {
-            const upvote_res = await fetch(`/api/upvote/${postId}?username=${user}`, {
+            const upvoteRes = await fetch(`/api/upvote/${postId}?username=${username}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" }
             });
 
-            const result = await upvote_res.json();
-            console.log(result.message);
-           
+            if (upvoteRes.ok) {
+              const result = await upvoteRes.json();
+              console.log(result.message);
+                
+              // Toggle the upvote status
+              upvoteStatus[postId] = !isUpvoted;
+              
+              // Update the button appearance
+              if (!isUpvoted) {
+                // User just upvoted
+                e.target.classList.add("upvoted");
+                e.target.classList.remove("btn-outline-success");
+                e.target.textContent = "Upvoted";
+                
+                // Increment the count
+                const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
+                const currentCount = parseInt(countElement.textContent.replace("⬆ ", ""));
+                countElement.textContent = `⬆ ${currentCount + 1}`;
+              } else {
+                // User just removed upvote
+                e.target.classList.remove("upvoted");
+                e.target.classList.add("btn-outline-success");
+                e.target.textContent = "Upvote";
+                
+                // Decrement the count
+                const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
+                const currentCount = parseInt(countElement.textContent.replace("⬆ ", ""));
+                countElement.textContent = `⬆ ${currentCount - 1}`;
+              }
+            }
           } catch (err) {
             console.error("Upvote failed:", err);
           }
