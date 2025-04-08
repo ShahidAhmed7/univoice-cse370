@@ -9,22 +9,92 @@
     <h2>Welcome to UNIVOICE, {{username}}</h2>
     <button id = "new-post">Create a New Post</button>
     <button id = "logout">Log Out</button>
+    <hr>
+
+    <!-- Filter dropdowns -->
+    <div>
+        <label for="status">Status:</label>
+        <select id="status">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="eligible">Eligible</option>
+            <option value="submitted">Submitted</option>
+        </select>
+
+        <label for="sort">Sort By:</label>
+        <select id="sort">
+            <option value="latest">Latest</option>
+            <option value="upvotes">Most Upvoted</option>
+        </select>
+    </div>
+
+    <hr>
+
+    <!-- Where posts will be rendered -->
+    <div id="posts-container">
+        <!-- Posts will be inserted here dynamically -->
+    </div>
+
     
     <script>
         const logout_button = document.getElementById("logout");
-
+    
         logout_button.addEventListener("click", async () => {
             const response = await fetch("/api/logout", { method: "POST" });
             if (response.ok) {
                 window.location.href = "/login";  
             }
         });  
-
+    
         const new_post_button = document.getElementById("new-post");
         new_post_button.addEventListener("click", () => {
             window.location.href = "/new-post";
         });
-
+    
+        async function loadpostcard(){
+            const result = await fetch("/partials/postcard")
+            return await result.text();
+        }
+    
+        async function loadposts(status = "", sort = "latest") {
+            const response = await fetch(`/api/posts?status=${status}&sort=${sort}`);
+            if (!response.ok) {
+                const error = await response.json();
+                alert(error.message);
+                return;
+            }
+            const posts = await response.json();
+            const postsContainer = document.getElementById("posts-container");
+            postsContainer.innerHTML = ""; // Clear previous posts
+    
+            const postcardTemplate = await loadpostcard();
+    
+            posts.forEach(post => {
+                let postCard = postcardTemplate
+                    .replace("{{title}}", post.title)
+                    .replace("{{content}}", post.content)
+                    .replace("{{username}}", post.username)
+                    .replace("{{time_ago}}", post.time_ago)
+                    .replace("{{upvotes}}", post.upvotes)
+                    .replace("{{comments}}", post.comments);
+                postsContainer.innerHTML += postCard;
+            });
+        }
+    
+        // Call loadposts() initially to load posts on page load
+        loadposts();
+    
+        document.getElementById("status").addEventListener("change", (e) => {
+            const status = e.target.value;
+            const sort = document.getElementById("sort").value;
+            loadposts(status, sort);
+        });
+    
+        document.getElementById("sort").addEventListener("change", (e) => {
+            const sort = e.target.value;
+            const status = document.getElementById("status").value;
+            loadposts(status, sort);
+        });
     </script>
 </body>
 </html>

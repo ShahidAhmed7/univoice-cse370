@@ -3,12 +3,15 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from utils import serializer
+from database import get_all_posts
 
 from routes import auth, posts 
 
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/partials", StaticFiles(directory="templates/partials"), name="partials")
+
 templates = Jinja2Templates(directory="templates")
 
 
@@ -45,7 +48,12 @@ def display_home(request: Request):
         username = data.get("username")
         print(username)
         role = data.get("role")
-        return templates.TemplateResponse("home.html",{"request" : request, "username": username, "role" : role})
+
+        return templates.TemplateResponse("home.html",
+                {"request" : request, 
+                 "username": username, 
+                 "role" : role})
+    
     except Exception as e:
         print("Invalid session:", e)
         return RedirectResponse("/login")

@@ -3,7 +3,8 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 from sqlalchemy.exc import SQLAlchemyError
-
+from utils import format_time_ago, helper_query
+from uuid import UUID
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -68,3 +69,54 @@ def insert_post(username, title, content):
             trans.rollback()
             return False
 
+def get_all_posts(status = None, sort = "latest"):
+    query = helper_query(status,sort)
+    print(f"print status : {status} and sort : {sort}")
+    with engine.connect() as conn:
+        results = conn.execute(text(query)).mappings().all()
+    
+    posts = []
+
+    for row in results:
+        post_dict = dict(row)  
+        post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
+        posts.append(post_dict)
+
+    # Convert UUID objects to strings
+    for key, value in post_dict.items():
+        if isinstance(value, UUID):
+            post_dict[key] = str(value)
+
+    # Add human-readable time
+    for post in posts:
+        post["time_ago"] = format_time_ago(post["created_at"])
+
+    return posts  
+
+def get_post_by_id(post_id):
+    with engine.connect() as conn:
+        query = text("""
+            SELECT 
+                posts.id,
+                posts.title,
+                posts.content,
+                posts.status,
+                posts.created_at,
+                users.username,
+                COUNT(DISTINCT upvotes.id) AS upvotes,
+                COUNT(DISTINCT comments.id) AS comments
+            FROM posts
+            JOIN users ON posts.user_id = users.id
+            LEFT JOIN upvotes ON upvotes.post_id = posts.id
+            LEFT JOIN comments ON comments.post_id = posts.id
+            WHERE posts.id = :post_id
+            GROUP BY posts.id, users.username
+        """)
+        result = conn.execute(query, {"post_id": post_id}).mappings().all()
+    
+    if len(result) == 0:
+        return False 
+    
+    post_dict = dict(result[0])  
+    post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
+    return post_dict
