@@ -3,8 +3,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from utils import serializer
-from database import get_all_posts
-
 from routes import auth, posts 
 
 app = FastAPI()
