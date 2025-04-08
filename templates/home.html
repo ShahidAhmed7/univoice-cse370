@@ -154,10 +154,25 @@
     }
 
     function attachPostActions() {
+      const user = "{{ username }}";
       document.querySelectorAll(".upvote-button").forEach(button => {
-        button.addEventListener("click", (e) => {
+        button.addEventListener("click", async (e) => {
           const postId = e.target.dataset.id;
           console.log("Upvote clicked for post:", postId);
+          console.log("User:", user);
+
+          try {
+            const upvote_res = await fetch(`/api/upvote/${postId}?username=${user}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" }
+            });
+
+            const result = await upvote_res.json();
+            console.log(result.message);
+           
+          } catch (err) {
+            console.error("Upvote failed:", err);
+          }
         });
       });
 

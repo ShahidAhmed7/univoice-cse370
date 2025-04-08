@@ -141,4 +141,50 @@ def get_post_by_id(post_id):
 
     return post_dict
 
+def get_user_id(username):
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT id FROM users WHERE username = :username"), 
+                              {"username" : username}).mappings().all()
+        if len(result) == 0:
+            return False 
+        return result[0]["id"]
+    
+def add_upvote(post_id, user_id):
+    with engine.connect() as conn:
+        trans = conn.begin()
+        result = conn.execute(text("""
+            INSERT INTO upvotes (post_id, user_id)
+            VALUES (:post_id, :user_id)
+            ON CONFLICT (post_id, user_id) DO NOTHING
+        """), {
+            "post_id": post_id,
+            "user_id": user_id
+        })
+        trans.commit()
+        return result.rowcount > 0
+
+def has_upvoted(post_id, user_id):
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT COUNT(*) FROM upvotes
+            WHERE post_id = :post_id AND user_id = :user_id
+        """), {
+            "post_id": post_id,
+            "user_id": user_id
+        }).scalar()
+
+        return result > 0
+    
+def remove_upvote(post_id,user_id):
+    with engine.connect() as conn:
+        trans = conn.begin()
+        result = conn.execute(text("""
+            DELETE FROM upvotes
+            WHERE post_id = :post_id AND user_id = :user_id
+        """), {
+            "post_id": post_id,
+            "user_id": user_id
+        })
+        trans.commit()
+        return result.rowcount > 0
 

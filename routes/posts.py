@@ -1,9 +1,10 @@
 from schemas.post import PostBase
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from database import insert_post, get_all_posts, get_post_by_id
+from database import insert_post, get_all_posts, get_post_by_id,get_user_id
 from uuid import UUID
+from database import add_upvote, remove_upvote, has_upvoted
 
 router = APIRouter()
 
@@ -55,6 +56,24 @@ def get_post(post_id: str):
         print("🔥 API error:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
+@router.post("/api/upvote/{post_id}")
+def upvote_toggle(post_id: str, username: str = Query(...)):
+    try:
+        post_id = UUID(post_id)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"message": "Invalid post ID"})
+
+    user_id = get_user_id(username)
+    if not user_id:
+        return JSONResponse(status_code=404, content={"message": "User not found"})
+
+    if has_upvoted(post_id, user_id):
+        removed = remove_upvote(post_id, user_id)
+        return JSONResponse(status_code=200, content={"message": "Upvote removed", "success": removed})
+    else:
+        added = add_upvote(post_id, user_id)
+        return JSONResponse(status_code=200, content={"message": "Upvoted", "success": added})
 
                            
     
