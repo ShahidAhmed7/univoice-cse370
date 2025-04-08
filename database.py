@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import create_engine,text
 from dotenv import load_dotenv
 import os
@@ -68,32 +69,32 @@ def insert_post(username, title, content):
             print(" Error inserting post:", e)
             trans.rollback()
             return False
-
-def get_all_posts(status = None, sort = "latest"):
-    query = helper_query(status,sort)
-    print(f"print status : {status} and sort : {sort}")
+def get_all_posts(status=None, sort="latest"):
+    query = helper_query(status, sort)
     with engine.connect() as conn:
         results = conn.execute(text(query)).mappings().all()
     
     posts = []
 
     for row in results:
-        post_dict = dict(row)  
-        post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
+        post_dict = dict(row)
+
+        # Convert UUIDs to strings
+        for key, value in post_dict.items():
+            if isinstance(value, UUID):
+                post_dict[key] = str(value)
+
+        # Add time_ago using created_at, then remove created_at
+        post_dict["time_ago"] = format_time_ago(row["created_at"])
+        post_dict.pop("created_at", None)  # Safely remove created_at
+
         posts.append(post_dict)
 
-    # Convert UUID objects to strings
-    for key, value in post_dict.items():
-        if isinstance(value, UUID):
-            post_dict[key] = str(value)
+    return posts
 
-    # Add human-readable time
-    for post in posts:
-        post["time_ago"] = format_time_ago(post["created_at"])
-
-    return posts  
 
 def get_post_by_id(post_id):
+    post_id = UUID(post_id) 
     with engine.connect() as conn:
         query = text("""
             SELECT 
@@ -119,4 +120,6 @@ def get_post_by_id(post_id):
     
     post_dict = dict(result[0])  
     post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
+    post_dict.pop("created_at", None)  # Safely remove created_at
+    post_dict["id"] = str(post_dict["id"])  # Convert UUID to string
     return post_dict

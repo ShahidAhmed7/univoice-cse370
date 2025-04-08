@@ -10,7 +10,6 @@ from routes import auth, posts
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/partials", StaticFiles(directory="templates/partials"), name="partials")
 
 templates = Jinja2Templates(directory="templates")
 

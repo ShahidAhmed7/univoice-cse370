@@ -1,100 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Home</title>
 </head>
 <body>
-    <h2>Welcome to UNIVOICE, {{username}}</h2>
-    <button id = "new-post">Create a New Post</button>
-    <button id = "logout">Log Out</button>
-    <hr>
+  <h2>Welcome to UNIVOICE, {{username}}</h2>
+  <button id="new-post">Create a New Post</button>
+  <button id="logout">Log Out</button>
+  <hr />
 
-    <!-- Filter dropdowns -->
-    <div>
-        <label for="status">Status:</label>
-        <select id="status">
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="eligible">Eligible</option>
-            <option value="submitted">Submitted</option>
-        </select>
+  <!-- Filter dropdowns -->
+  <div>
+    <label for="status">Status:</label>
+    <select id="status">
+      <option value="">All</option>
+      <option value="pending">Pending</option>
+      <option value="eligible">Eligible</option>
+      <option value="submitted">Submitted</option>
+    </select>
 
-        <label for="sort">Sort By:</label>
-        <select id="sort">
-            <option value="latest">Latest</option>
-            <option value="upvotes">Most Upvoted</option>
-        </select>
-    </div>
+    <label for="sort">Sort By:</label>
+    <select id="sort">
+      <option value="latest">Latest</option>
+      <option value="upvotes">Most Upvoted</option>
+    </select>
+  </div>
 
-    <hr>
+  <hr />
 
-    <!-- Where posts will be rendered -->
-    <div id="posts-container">
-        <!-- Posts will be inserted here dynamically -->
-    </div>
+  <!-- Where posts will be rendered -->
+  <div id="posts-container"></div>
 
-    
-    <script>
-        const logout_button = document.getElementById("logout");
-    
-        logout_button.addEventListener("click", async () => {
-            const response = await fetch("/api/logout", { method: "POST" });
-            if (response.ok) {
-                window.location.href = "/login";  
-            }
-        });  
-    
-        const new_post_button = document.getElementById("new-post");
-        new_post_button.addEventListener("click", () => {
-            window.location.href = "/new-post";
-        });
-    
-        async function loadpostcard(){
-            const result = await fetch("/partials/postcard")
-            return await result.text();
+  <script>
+    // 🔁 Handle logout
+    document.getElementById("logout").addEventListener("click", async () => {
+      const response = await fetch("/api/logout", { method: "POST" });
+      if (response.ok) window.location.href = "/login";
+    });
+
+    // ➕ Handle new post
+    document.getElementById("new-post").addEventListener("click", () => {
+      window.location.href = "/new-post";
+    });
+
+    // 📦 Create a single post card
+    function createPostCard(post) {
+      const card = document.createElement("div");
+      card.classList.add("post-card");
+
+      card.innerHTML = `
+        <h3>${post.title}</h3>
+        <p>${post.content}</p>
+        <p><strong>Status:</strong> ${post.status}</p>
+        <p><strong>Upvotes:</strong> ${post.upvotes} | Comments: ${post.comments}</p>
+        <p><em>Posted by ${post.username} • ${post.time_ago}</em></p>
+        <button class="upvote-button" data-id="${post.id}">Upvote</button>
+        <button class="comment-button" data-id="${post.id}">Comment</button>
+        <hr>
+      `;
+      return card;
+    }
+
+    //  Load all posts based on status & sort filters
+    async function loadPosts(status = "", sort = "latest") {
+      try {
+        const response = await fetch(`/api/posts?status=${status}&sort=${sort}`);
+        if (!response.ok) {
+          const error = await response.json();
+          alert(error.message);
+          return;
         }
-    
-        async function loadposts(status = "", sort = "latest") {
-            const response = await fetch(`/api/posts?status=${status}&sort=${sort}`);
-            if (!response.ok) {
-                const error = await response.json();
-                alert(error.message);
-                return;
-            }
-            const posts = await response.json();
-            const postsContainer = document.getElementById("posts-container");
-            postsContainer.innerHTML = ""; // Clear previous posts
-    
-            const postcardTemplate = await loadpostcard();
-    
-            posts.forEach(post => {
-                let postCard = postcardTemplate
-                    .replace("{{title}}", post.title)
-                    .replace("{{content}}", post.content)
-                    .replace("{{username}}", post.username)
-                    .replace("{{time_ago}}", post.time_ago)
-                    .replace("{{upvotes}}", post.upvotes)
-                    .replace("{{comments}}", post.comments);
-                postsContainer.innerHTML += postCard;
-            });
-        }
-    
-        // Call loadposts() initially to load posts on page load
-        loadposts();
-    
-        document.getElementById("status").addEventListener("change", (e) => {
-            const status = e.target.value;
-            const sort = document.getElementById("sort").value;
-            loadposts(status, sort);
+
+        const data = await response.json();
+        const postsContainer = document.getElementById("posts-container");
+        postsContainer.innerHTML = "";
+
+        data.posts.forEach(post => {
+          const card = createPostCard(post);
+          postsContainer.appendChild(card);
         });
-    
-        document.getElementById("sort").addEventListener("change", (e) => {
-            const sort = e.target.value;
-            const status = document.getElementById("status").value;
-            loadposts(status, sort);
+
+        attachPostActions(); // 🎯 Attach actions to new buttons
+      } catch (err) {
+        console.error("Failed to load posts:", err);
+      }
+    }
+
+    // 🎯 Attach upvote & comment actions
+    function attachPostActions() {
+      document.querySelectorAll(".upvote-button").forEach(button => {
+        button.addEventListener("click", (e) => {
+          const postId = e.target.dataset.id;
+          console.log("⬆️ Upvote clicked for:", postId);
+          // TODO: Call your upvote API here later
         });
-    </script>
+      });
+
+      document.querySelectorAll(".comment-button").forEach(button => {
+        button.addEventListener("click", (e) => {
+          const postId = e.target.dataset.id;
+          console.log("💬 Comment clicked for:", postId);
+          // TODO: Show comment modal or redirect later
+        });
+      });
+    }
+
+    // Filter change listeners
+    document.getElementById("status").addEventListener("change", () => {
+      const status = document.getElementById("status").value;
+      const sort = document.getElementById("sort").value;
+      loadPosts(status, sort);
+    });
+
+    document.getElementById("sort").addEventListener("change", () => {
+      const status = document.getElementById("status").value;
+      const sort = document.getElementById("sort").value;
+      loadPosts(status, sort);
+    });
+
+    loadPosts();
+  </script>
 </body>
 </html>
+
