@@ -154,6 +154,45 @@
     .dropdown-item.delete i {
       color: #EF4444;
     }
+    /* Toast Notifications */
+  .toast-container {
+    z-index: 1050;
+  }
+
+  .toast {
+    opacity: 1 !important;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    min-width: 250px;
+  }
+
+  .toast-body {
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+  }
+
+  .toast .btn-close-white {
+    opacity: 0.8;
+  }
+
+  .toast .btn-close-white:hover {
+    opacity: 1;
+  }
+
+/* Spinner styles */
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.2em;
+  margin-right: 0.5rem;
+}
+
+/* Fade transitions */
+.fade-out {
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
   </style>
 </head>
 <body>
@@ -294,7 +333,48 @@ const editModal = new bootstrap.Modal(document.getElementById('editModal'));
 const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
 
 let currentPostId = null;
-let currentPostData = null;
+
+// Toast notification system
+function createToastContainer() {
+  const container = document.createElement('div');
+  container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+  container.style.zIndex = '1050';
+  container.id = 'toastContainer';
+  document.body.appendChild(container);
+  return container;
+}
+
+function showToast(message, type = 'success') {
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = createToastContainer();
+  }
+  
+  const id = 'toast-' + Date.now();
+  const bgColor = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-primary';
+  const icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+  
+  const toastHtml = `
+    <div class="toast align-items-center ${bgColor} text-white border-0" role="alert" aria-live="assertive" aria-atomic="true" id="${id}">
+      <div class="d-flex">
+        <div class="toast-body">
+          <i class="fas ${icon} me-2"></i> ${message}
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  `;
+  
+  container.insertAdjacentHTML('beforeend', toastHtml);
+  const toastElement = document.getElementById(id);
+  const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+  toast.show();
+  
+  // Remove toast from DOM after it's hidden
+  toastElement.addEventListener('hidden.bs.toast', function() {
+    toastElement.remove();
+  });
+}
 
 async function checkUpvoteStatus(postId) {
   try {
@@ -382,45 +462,119 @@ function createPostCard(post, hasUpvoted = false) {
   return card;
 }
 
+// Add loading spinner function
+function showLoadingSpinner(container) {
+  container.innerHTML = `
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p class="mt-2 text-muted">Loading content...</p>
+    </div>
+  `;
+}
+
 async function loadPosts(status = "", sort = "latest") {
+  const postsContainer = document.getElementById("posts-container");
+  showLoadingSpinner(postsContainer);
+  
   try {
     const response = await fetch(`/api/posts?status=${status}&sort=${sort}`);
-    const postsContainer = document.getElementById("posts-container");
-    postsContainer.innerHTML = "";
-
+    
     if (!response.ok) {
       const error = await response.json();
-      postsContainer.innerHTML = `<p class="text-muted">${error.message}</p>`;
+      postsContainer.innerHTML = `<p class="text-muted text-center py-5">${error.message}</p>`;
       return;
     }
 
     const data = await response.json();
+    postsContainer.innerHTML = "";
+    
     if (data.posts.length === 0) {
       postsContainer.innerHTML = `<p class="text-center text-muted py-5">No posts found with the selected filters.</p>`;
       return;
     }
     
-    for (const p of data.posts) {
-      const postRes = await fetch(`/api/posts/${p.id}`);
-      if (postRes.ok) {
-        const detailed = await postRes.json();
-        // Check if this post has been upvoted (from our client-side tracking)
-        const hasUpvoted = await checkUpvoteStatus(detailed.post.id);
-        const card = createPostCard(detailed.post, hasUpvoted);
-        postsContainer.appendChild(card);
+    const promises = data.posts.map(async (p) => {
+      try {
+        const postRes = await fetch(`/api/posts/${p.id}`);
+        if (postRes.ok) {
+          const detailed = await postRes.json();
+          const hasUpvoted = await checkUpvoteStatus(detailed.post.id);
+          return { post: detailed.post, hasUpvoted };
+        }
+      } catch (err) {
+        console.error(`Error fetching post ${p.id}:`, err);
       }
-    }
-    attachPostActions();
+      return null;
+    });
+    
+    const results = await Promise.all(promises);
+    
+    results.filter(Boolean).forEach(result => {
+      const card = createPostCard(result.post, result.hasUpvoted);
+      postsContainer.appendChild(card);
+    });
   } catch (err) {
     console.error("Error loading posts:", err);
+    postsContainer.innerHTML = `<p class="text-center text-danger py-5">Failed to load posts. Please try again.</p>`;
+  }
+  
+  // Use event delegation for all post actions
+  setupEventDelegation();
+}
+
+async function loadComments(postId) {
+  const commentsContainer = document.getElementById('comments-container');
+  const noCommentsMessage = document.getElementById('no-comments-message');
+  
+  showLoadingSpinner(commentsContainer);
+  noCommentsMessage.style.display = 'none';
+  
+  try {
+    const response = await fetch(`/api/comments/${postId}`);
+    const data = await response.json();
+    
+    commentsContainer.innerHTML = '';
+    
+    if (data.comments && data.comments.length > 0) {
+      data.comments.forEach(comment => {
+        const commentEl = document.createElement('div');
+        commentEl.className = 'comment-item';
+        commentEl.innerHTML = `
+          <div class="comment-header">
+            <span class="comment-author">${comment.username}</span>
+            <span class="comment-time">${comment.created_at}</span>
+          </div>
+          <p class="comment-text">${comment.content}</p>
+        `;
+        commentsContainer.appendChild(commentEl);
+      });
+      noCommentsMessage.style.display = 'none';
+    } else {
+      commentsContainer.innerHTML = '';
+      noCommentsMessage.style.display = 'block';
+    }
+  } catch (err) {
+    console.error("Error loading comments:", err);
+    commentsContainer.innerHTML = `<p class="text-danger">Failed to load comments. Please try again.</p>`;
+    noCommentsMessage.style.display = 'none';
   }
 }
 
-function attachPostActions() {
-  // Make sure to select all elements, including dynamically created ones
-  document.querySelectorAll(".upvote-button").forEach(button => {
-    button.addEventListener("click", async (e) => {
-      const postId = e.target.dataset.id;
+// Event delegation for all dynamically created elements
+function setupEventDelegation() {
+  // Remove any existing event listeners to prevent duplicates
+  const postsContainer = document.getElementById('posts-container');
+  const newPostsContainer = postsContainer.cloneNode(true);
+  postsContainer.parentNode.replaceChild(newPostsContainer, postsContainer);
+  
+  // Add event delegation for all post actions
+  newPostsContainer.addEventListener('click', async (e) => {
+    // Upvote button handler
+    if (e.target.classList.contains('upvote-button') || e.target.closest('.upvote-button')) {
+      const button = e.target.classList.contains('upvote-button') ? e.target : e.target.closest('.upvote-button');
+      const postId = button.dataset.id;
       const isUpvoted = upvoteStatus[postId] || false;
       
       try {
@@ -431,7 +585,6 @@ function attachPostActions() {
 
         if (upvoteRes.ok) {
           const result = await upvoteRes.json();
-          console.log(result.message);
             
           // Toggle the upvote status
           upvoteStatus[postId] = !isUpvoted;
@@ -439,9 +592,9 @@ function attachPostActions() {
           // Update the button appearance
           if (!isUpvoted) {
             // User just upvoted
-            e.target.classList.add("upvoted");
-            e.target.classList.remove("btn-outline-success");
-            e.target.textContent = "Upvoted";
+            button.classList.add("upvoted");
+            button.classList.remove("btn-outline-success");
+            button.textContent = "Upvoted";
             
             // Increment the count
             const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
@@ -449,9 +602,9 @@ function attachPostActions() {
             countElement.textContent = `⬆ ${currentCount + 1}`;
           } else {
             // User just removed upvote
-            e.target.classList.remove("upvoted");
-            e.target.classList.add("btn-outline-success");
-            e.target.textContent = "Upvote";
+            button.classList.remove("upvoted");
+            button.classList.add("btn-outline-success");
+            button.textContent = "Upvote";
             
             // Decrement the count
             const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
@@ -461,13 +614,14 @@ function attachPostActions() {
         }
       } catch (err) {
         console.error("Upvote failed:", err);
+        showToast("Failed to update upvote", "error");
       }
-    });
-  });
-
-  document.querySelectorAll(".comment-button").forEach(button => {
-    button.addEventListener("click", async (e) => {
-      const postId = e.target.dataset.id;
+    }
+    
+    // Comment button handler
+    if (e.target.classList.contains('comment-button') || e.target.closest('.comment-button')) {
+      const button = e.target.classList.contains('comment-button') ? e.target : e.target.closest('.comment-button');
+      const postId = button.dataset.id;
       currentPostId = postId;
       
       // Find the post card to get its title and content
@@ -484,20 +638,15 @@ function attachPostActions() {
         // Show the modal
         commentModal.show();
       }
-    });
-  });
-
-  // Attach edit action
-  document.querySelectorAll(".dropdown-item.edit").forEach(item => {
-    item.addEventListener("click", async (e) => {
+    }
+    
+    // Edit button handler
+    if (e.target.classList.contains('edit') || e.target.closest('.dropdown-item.edit')) {
       e.preventDefault();
-      // Get the closest .dropdown-item element (could be the icon or text inside)
-      const dropdownItem = e.target.closest('.dropdown-item');
-      if (!dropdownItem) return;
+      const item = e.target.classList.contains('edit') ? e.target : e.target.closest('.dropdown-item.edit');
+      const postId = item.dataset.id;
       
-      const postId = dropdownItem.dataset.id;
       const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
-      
       if (postCard) {
         // Populate the edit modal with post data
         document.getElementById('edit-post-id').value = postId;
@@ -507,31 +656,91 @@ function attachPostActions() {
         // Show the edit modal
         editModal.show();
       }
-    });
-  });
-
-  // Attach delete action
-  document.querySelectorAll(".dropdown-item.delete").forEach(item => {
-    item.addEventListener("click", async (e) => {
+    }
+    
+    // Delete button handler
+    if (e.target.classList.contains('delete') || e.target.closest('.dropdown-item.delete')) {
       e.preventDefault();
-      // Get the closest .dropdown-item element (could be the icon or text inside)
-      const dropdownItem = e.target.closest('.dropdown-item');
-      if (!dropdownItem) return;
-      
-      const postId = dropdownItem.dataset.id;
+      const item = e.target.classList.contains('delete') ? e.target : e.target.closest('.dropdown-item.delete');
+      const postId = item.dataset.id;
       
       // Set the post ID for deletion
       document.getElementById('delete-post-id').value = postId;
       
       // Show the delete confirmation modal
       deleteModal.show();
-    });
+    }
   });
 }
+
+// Handle comment form submission
+document.getElementById('comment-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const postId = document.getElementById('comment-post-id').value;
+  const content = document.getElementById('comment-content').value.trim();
+  
+  if (!content) {
+    showToast("Comment cannot be empty", "error");
+    return;
+  }
+  
+  const submitButton = e.target.querySelector('button[type="submit"]');
+  const originalText = submitButton.innerHTML;
+  submitButton.disabled = true;
+  submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Posting...';
+  
+  try {
+    const response = await fetch(`/api/comment/${postId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        post_id: postId,
+        content: content,
+        username: username
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to post comment");
+    }
+
+    // Clear the form
+    document.getElementById('comment-content').value = '';
+    
+    // Reload comments
+    await loadComments(postId);
+    
+    // Show success message
+    showToast("Comment posted successfully", "success");
+    
+    // Update comment count in post card
+    const countElement = document.querySelector(`.comment-count[data-id="${postId}"]`);
+    if (countElement) {
+      const currentCount = parseInt(countElement.textContent.replace("💬 ", ""));
+      countElement.textContent = `💬 ${currentCount + 1}`;
+    }
+    
+  } catch (err) {
+    console.error("Error posting comment:", err);
+    showToast(`Failed to post comment: ${err.message}`, "error");
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalText;
+  }
+});
 
 // Handle delete confirmation
 document.getElementById('confirm-delete').addEventListener('click', async () => {
   const postId = document.getElementById('delete-post-id').value;
+  const button = document.getElementById('confirm-delete');
+  const originalText = button.innerHTML;
+  
+  button.disabled = true;
+  button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Deleting...';
   
   try {
     const response = await fetch(`/api/post/${postId}`, {
@@ -543,21 +752,33 @@ document.getElementById('confirm-delete').addEventListener('click', async () => 
       throw new Error(errorData.message || "Failed to delete post");
     }
 
-    const result = await response.json();
-    
     // Close the modal
     deleteModal.hide();
     
-    // Reload posts to show the updated list
+    // Remove the post card from DOM for instant feedback
+    const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
+    if (postCard) {
+      postCard.style.transition = 'opacity 0.3s ease';
+      postCard.style.opacity = '0';
+      setTimeout(() => {
+        postCard.remove();
+      }, 300);
+    }
+    
+    // Reload posts
     const status = document.getElementById("status").value;
     const sort = document.getElementById("sort").value;
     await loadPosts(status, sort);
     
-    // Show success message
-    alert('Post deleted successfully');
+    // Show success toast
+    showToast('Post deleted successfully', 'success');
+    
   } catch (err) {
     console.error("Error deleting post:", err);
-    alert(`Failed to delete post: ${err.message}`);
+    showToast(`Failed to delete post: ${err.message}`, 'error');
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalText;
   }
 });
 
@@ -570,9 +791,14 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
   const content = document.getElementById('edit-content').value.trim();
   
   if (!title || !content) {
-    alert('Title and content are required');
+    showToast('Title and content are required', 'error');
     return;
   }
+  
+  const submitButton = e.target.querySelector('button[type="submit"]');
+  const originalText = submitButton.innerHTML;
+  submitButton.disabled = true;
+  submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
   
   try {
     const response = await fetch(`/api/post/${postId}`, {
@@ -590,27 +816,49 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
       const errorData = await response.json();
       throw new Error(errorData.message || "Failed to update post");
     }
-
-    const result = await response.json();
     
     // Close the modal
     editModal.hide();
     
-    // Reload posts to show the updated one
+    // Update post in the DOM immediately for instant feedback
+    const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
+    if (postCard) {
+      const titleEl = postCard.querySelector('h5');
+      const contentEl = postCard.querySelector('p');
+      if (titleEl) titleEl.textContent = title;
+      if (contentEl) contentEl.textContent = content;
+      
+      // Update data attributes
+      postCard.dataset.title = title;
+      postCard.dataset.content = content;
+    }
+    
+    // Reload posts
     const status = document.getElementById("status").value;
     const sort = document.getElementById("sort").value;
     await loadPosts(status, sort);
     
-    // Show success message
-    alert('Post updated successfully');
+    // Show success toast
+    showToast('Post updated successfully', 'success');
+    
   } catch (err) {
     console.error("Error updating post:", err);
-    alert(`Failed to update post: ${err.message}`);
+    showToast(`Failed to update post: ${err.message}`, 'error');
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalText;
   }
 });
-// Add this to your JavaScript in home.html
+
+// Logout button handler
 document.getElementById("logout").addEventListener("click", async () => {
+  const button = document.getElementById("logout");
+  const originalText = button.innerHTML;
+  
   try {
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Logging out...';
+    
     const response = await fetch('/api/logout', {
       method: 'POST'
     });
@@ -618,14 +866,27 @@ document.getElementById("logout").addEventListener("click", async () => {
     if (response.ok) {
       window.location.href = '/login';
     } else {
-      console.error("Logout failed");
+      throw new Error("Logout failed");
     }
   } catch (err) {
     console.error("Error during logout:", err);
+    showToast("Logout failed. Please try again.", "error");
+    button.disabled = false;
+    button.innerHTML = originalText;
   }
 });
+
+// New post button handler
+document.getElementById("new-post").addEventListener("click", () => {
+  window.location.href = '/new-post';
+});
+
 // Initial load
 document.addEventListener('DOMContentLoaded', function() {
+  // Create toast container
+  createToastContainer();
+  
+  // Load posts
   loadPosts();
   
   // Add event listeners for filter changes
