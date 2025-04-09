@@ -1,18 +1,18 @@
-from schemas.post import PostBase, CommentBase,PostUpdate
+from schemas.post import PostBase, CommentBase, PostUpdate
 from utils import serializer
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-from database import insert_post, get_all_posts, get_post_by_id,get_user_id
+from database import insert_post, get_all_posts, get_post_by_id, get_user_id
 from uuid import UUID
 from database import add_upvote, remove_upvote, has_upvoted
-from database import insert_comment,get_comments 
-from database import delete_post,update_post
+from database import insert_comment, get_comments 
+from database import delete_post as db_delete_post, update_post as db_update_post
 
 router = APIRouter()
 
 @router.post("/api/new-post")
 def new_post(post : PostBase):
-    add_to_db = insert_post(post.username,post.title,post.content,post.is_anonymous)
+    add_to_db = insert_post(post.username, post.title, post.content, post.is_anonymous)
     if add_to_db:
         return JSONResponse(
             status_code = 201,
@@ -28,7 +28,7 @@ def new_post(post : PostBase):
 def get_posts(status : str, sort : str):
     if status == "":
         status = None
-    posts = get_all_posts(status,sort)
+    posts = get_all_posts(status, sort)
     
     if len(posts) == 0:
         return JSONResponse(
@@ -57,8 +57,6 @@ def get_post(post_id: str):
     except Exception as e:
         print(" API error:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-
 
 @router.get("/api/upvote/check/{post_id}")
 def check_upvote(post_id: str, username: str = Query(...)):
@@ -132,32 +130,30 @@ def get_comments_by_post_id(post_id: str):
     
 
 @router.delete("/api/post/{post_id}")
-def delete_post(post_id: str):
+def delete_post_route(post_id: str):
     try:
         post_id = UUID(post_id)
     except ValueError:
         return JSONResponse(status_code=400, content={"message": "Invalid post ID"})
 
-    delete = delete_post(post_id)
-    if delete:
-        return JSONResponse(status_code = 200, content = {"message" : "Post deleted successfully"})
+    # Use the imported database function, not the route function
+    delete_result = db_delete_post(post_id)
+    if delete_result:
+        return JSONResponse(status_code=200, content={"message": "Post deleted successfully"})
     else:
-        return JSONResponse(status_code = 400, content = {"message" : "Failed to delete post"})
+        return JSONResponse(status_code=400, content={"message": "Failed to delete post"})
     
 @router.put("/api/post/{post_id}")
-def update_post(post_id: str, post: PostUpdate):
+def update_post_route(post_id: str, post: PostUpdate):
     try:
         post_id = UUID(post_id)
     except ValueError:
         return JSONResponse(status_code=400, content={"message": "Invalid post ID"})
-    update = update_post(post_id, post.title, post.content)
-    if update:
-        return JSONResponse(status_code = 200, content = {"message" : "Post updated successfully"})
+    
+    # Use the imported database function, not the route function
+    update_result = db_update_post(post_id, post.title, post.content)
+    if update_result:
+        return JSONResponse(status_code=200, content={"message": "Post updated successfully"})
     else:
-        return JSONResponse(status_code = 400, content = {"message" : "Failed to update post"})
-
-
-
-
-    _
+        return JSONResponse(status_code=400, content={"message": "Failed to update post"})
 

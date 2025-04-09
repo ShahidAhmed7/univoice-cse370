@@ -283,503 +283,349 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    document.getElementById("logout").addEventListener("click", async () => {
-      const response = await fetch("/api/logout", { method: "POST" });
-      if (response.ok) window.location.href = "/login";
-    });
+// Store upvote status for all posts
+const upvoteStatus = {};
+const username = "{{ username }}";
+const userRole = "{{ role }}";
 
-    document.getElementById("new-post").addEventListener("click", () => {
-      window.location.href = "/new-post";
-    });
+// Comment modal instance
+const commentModal = new bootstrap.Modal(document.getElementById('commentModal'));
+const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
 
-    // Store upvote status for all posts
-    const upvoteStatus = {};
-    const username = "{{ username }}";
-    const userRole = "{{ role }}";
+let currentPostId = null;
+let currentPostData = null;
 
-    // Comment modal instance
-    const commentModal = new bootstrap.Modal(document.getElementById('commentModal'));
-    const editModal = new bootstrap.Modal(document.getElementById('editModal'));
-    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+async function checkUpvoteStatus(postId) {
+  try {
+    const response = await fetch(`/api/upvote/check/${postId}?username=${username}`);
+    if (response.ok) {
+      const data = await response.json();
+      upvoteStatus[postId] = data.upvoted;
+      return data.upvoted;
+    }
+    return false;
+  } catch (err) {
+    console.error("Error checking upvote status:", err);
+    return false;
+  }
+}
+
+function createPostCard(post, hasUpvoted = false) {
+  const card = document.createElement("div");
+  card.classList.add("post-card");
+  card.dataset.id = post.id;
+  card.dataset.title = post.title;
+  card.dataset.content = post.content;
+  card.dataset.isAnonymous = post.is_anonymous;
+  card.dataset.authorUsername = post.username;
+
+  // Store the upvote status in our tracking object
+  upvoteStatus[post.id] = hasUpvoted;
+  
+  const upvoteButtonClass = hasUpvoted 
+    ? "btn btn-sm upvote-button upvoted" 
+    : "btn btn-outline-success btn-sm upvote-button";
     
-    let currentPostId = null;
-    let currentPostData = null;
+  const upvoteButtonText = hasUpvoted ? "Upvoted" : "Upvote";
 
-    async function checkUpvoteStatus(postId) {
-      try {
-        const response = await fetch(`/api/upvote/check/${postId}?username=${username}`);
-        if (response.ok) {
-          const data = await response.json();
-          upvoteStatus[postId] = data.upvoted;
-          return data.upvoted;
-        }
-        return false;
-      } catch (err) {
-        console.error("Error checking upvote status:", err);
-        return false;
-      }
+  // Handle display name based on anonymity
+  let displayName = post.username;
+  
+  // If post is anonymous, only show real username to the author or admins
+  if (post.is_anonymous) {
+    if (userRole === "admin" || post.username === username) {
+      displayName = `${post.username} <span class="anonymous-badge">Anonymous</span>`;
+    } else {
+      displayName = "Anonymous";
+    }
+  }
+
+  // Check if user can edit/delete the post
+  const isAuthor = post.username === username;
+  const canDelete = isAuthor || userRole === 'admin';
+  const canEdit = isAuthor;
+
+  // Only display the actions dropdown if user can edit or delete
+  let actionsDropdown = '';
+  if (canEdit || canDelete) {
+    actionsDropdown = `
+      <div class="post-actions dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="fas fa-ellipsis-v"></i>
+        </button>
+        <ul class="dropdown-menu">
+          ${canEdit ? `<li><a class="dropdown-item edit" data-id="${post.id}" href="#"><i class="fas fa-edit"></i> Edit</a></li>` : ''}
+          ${canDelete ? `<li><a class="dropdown-item delete" data-id="${post.id}" href="#"><i class="fas fa-trash"></i> Delete</a></li>` : ''}
+        </ul>
+      </div>
+    `;
+  }
+
+  card.innerHTML = `
+    ${actionsDropdown}
+    <h5 class="mb-2 fw-semibold">${post.title}</h5>
+    <p>${post.content}</p>
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <div>
+        <span class="badge bg-secondary status-badge">${post.status}</span>
+        <span class="badge bg-success ms-2 upvote-count" data-id="${post.id}">⬆ ${post.upvotes}</span>
+        <span class="badge bg-info text-dark ms-2 comment-count" data-id="${post.id}">💬 ${post.comments}</span>
+      </div>
+      <small class="post-meta">Posted by <strong>${displayName}</strong> • ${post.time_ago}</small>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button class="${upvoteButtonClass}" data-id="${post.id}">${upvoteButtonText}</button>
+      <button class="btn btn-outline-brand btn-sm comment-button" data-id="${post.id}">Comment</button>
+    </div>`;
+
+  return card;
+}
+
+async function loadPosts(status = "", sort = "latest") {
+  try {
+    const response = await fetch(`/api/posts?status=${status}&sort=${sort}`);
+    const postsContainer = document.getElementById("posts-container");
+    postsContainer.innerHTML = "";
+
+    if (!response.ok) {
+      const error = await response.json();
+      postsContainer.innerHTML = `<p class="text-muted">${error.message}</p>`;
+      return;
     }
 
-    function createPostCard(post, hasUpvoted = false) {
-      const card = document.createElement("div");
-      card.classList.add("post-card");
-      card.dataset.id = post.id;
-      card.dataset.title = post.title;
-      card.dataset.content = post.content;
-      card.dataset.isAnonymous = post.is_anonymous;
-      card.dataset.authorUsername = post.username;
+    const data = await response.json();
+    if (data.posts.length === 0) {
+      postsContainer.innerHTML = `<p class="text-center text-muted py-5">No posts found with the selected filters.</p>`;
+      return;
+    }
+    
+    for (const p of data.posts) {
+      const postRes = await fetch(`/api/posts/${p.id}`);
+      if (postRes.ok) {
+        const detailed = await postRes.json();
+        // Check if this post has been upvoted (from our client-side tracking)
+        const hasUpvoted = await checkUpvoteStatus(detailed.post.id);
+        const card = createPostCard(detailed.post, hasUpvoted);
+        postsContainer.appendChild(card);
+      }
+    }
+    attachPostActions();
+  } catch (err) {
+    console.error("Error loading posts:", err);
+  }
+}
 
-      // Store the upvote status in our tracking object
-      upvoteStatus[post.id] = hasUpvoted;
+function attachPostActions() {
+  // Make sure to select all elements, including dynamically created ones
+  document.querySelectorAll(".upvote-button").forEach(button => {
+    button.addEventListener("click", async (e) => {
+      const postId = e.target.dataset.id;
+      const isUpvoted = upvoteStatus[postId] || false;
       
-      const upvoteButtonClass = hasUpvoted 
-        ? "btn btn-sm upvote-button upvoted" 
-        : "btn btn-outline-success btn-sm upvote-button";
-        
-      const upvoteButtonText = hasUpvoted ? "Upvoted" : "Upvote";
-
-      // Handle display name based on anonymity
-      let displayName = post.username;
-      
-      // If post is anonymous, only show real username to the author or admins
-      if (post.is_anonymous) {
-        if (userRole === "admin" || post.username === username) {
-          displayName = `${post.username} <span class="anonymous-badge">Anonymous</span>`;
-        } else {
-          displayName = "Anonymous";
-        }
-      }
-
-      // Check if user can edit/delete the post
-      const isAuthor = post.username === username;
-      const canDelete = isAuthor || userRole === 'admin';
-      const canEdit = isAuthor;
-
-      // Only display the actions dropdown if user can edit or delete
-      let actionsDropdown = '';
-      if (canEdit || canDelete) {
-        actionsDropdown = `
-          <div class="post-actions dropdown">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="fas fa-ellipsis-v"></i>
-            </button>
-            <ul class="dropdown-menu">
-              ${canEdit ? `<li><a class="dropdown-item edit" data-id="${post.id}" href="#"><i class="fas fa-edit"></i> Edit</a></li>` : ''}
-              ${canDelete ? `<li><a class="dropdown-item delete" data-id="${post.id}" href="#"><i class="fas fa-trash"></i> Delete</a></li>` : ''}
-            </ul>
-          </div>
-        `;
-      }
-
-      card.innerHTML = `
-        ${actionsDropdown}
-        <h5 class="mb-2 fw-semibold">${post.title}</h5>
-        <p>${post.content}</p>
-        <div class="d-flex justify-content-between align-items-center mt-3">
-          <div>
-            <span class="badge bg-secondary status-badge">${post.status}</span>
-            <span class="badge bg-success ms-2 upvote-count" data-id="${post.id}">⬆ ${post.upvotes}</span>
-            <span class="badge bg-info text-dark ms-2 comment-count" data-id="${post.id}">💬 ${post.comments}</span>
-          </div>
-          <small class="post-meta">Posted by <strong>${displayName}</strong> • ${post.time_ago}</small>
-        </div>
-        <div class="mt-3 d-flex gap-2">
-          <button class="${upvoteButtonClass}" data-id="${post.id}">${upvoteButtonText}</button>
-          <button class="btn btn-outline-brand btn-sm comment-button" data-id="${post.id}">Comment</button>
-        </div>`;
-
-      return card;
-    }
-
-    async function loadPosts(status = "", sort = "latest") {
       try {
-        const response = await fetch(`/api/posts?status=${status}&sort=${sort}`);
-        const postsContainer = document.getElementById("posts-container");
-        postsContainer.innerHTML = "";
-
-        if (!response.ok) {
-          const error = await response.json();
-          postsContainer.innerHTML = `<p class="text-muted">${error.message}</p>`;
-          return;
-        }
-
-        const data = await response.json();
-        if (data.posts.length === 0) {
-          postsContainer.innerHTML = `<p class="text-center text-muted py-5">No posts found with the selected filters.</p>`;
-          return;
-        }
-        
-        for (const p of data.posts) {
-          const postRes = await fetch(`/api/posts/${p.id}`);
-          if (postRes.ok) {
-            const detailed = await postRes.json();
-            // Check if this post has been upvoted (from our client-side tracking)
-            const hasUpvoted = await checkUpvoteStatus(detailed.post.id);
-            const card = createPostCard(detailed.post, hasUpvoted);
-            postsContainer.appendChild(card);
-          }
-        }
-        attachPostActions();
-      } catch (err) {
-        console.error("Error loading posts:", err);
-      }
-    }
-
-    async function loadComments(postId) {
-      try {
-        // Get the post data first to check anonymity
-        const postResponse = await fetch(`/api/posts/${postId}`);
-        if (!postResponse.ok) {
-          throw new Error("Failed to load post details");
-        }
-        
-        const postData = await postResponse.json();
-        const isAnonymous = postData.post.is_anonymous;
-        const postAuthor = postData.post.username;
-        currentPostData = postData.post;
-        
-        // Display post author in modal
-        const modalAuthorElement = document.getElementById('modal-post-author');
-        
-        // Format author display based on anonymity
-        let authorDisplay = `Posted by: <strong>${postAuthor}</strong>`;
-        if (isAnonymous) {
-          if (userRole === "admin" || username === postAuthor) {
-            authorDisplay = `Posted by: <strong>${postAuthor}</strong> <span class="anonymous-badge">Anonymous</span>`;
-          } else {
-            authorDisplay = `Posted by: <strong>Anonymous</strong>`;
-          }
-        }
-        modalAuthorElement.innerHTML = authorDisplay;
-        
-        // Now load comments
-        const response = await fetch(`/api/comments/${postId}`);
-        if (!response.ok) {
-          throw new Error("Failed to load comments");
-        }
-        
-        const data = await response.json();
-        const commentsContainer = document.getElementById("comments-container");
-        const noCommentsMessage = document.getElementById("no-comments-message");
-        
-        // Clear previous comments
-        commentsContainer.innerHTML = '';
-        
-        if (data.comments && data.comments.length > 0) {
-          noCommentsMessage.style.display = 'none';
-          
-          data.comments.forEach(comment => {
-            let displayName = comment.username;
-            
-            // If the post is anonymous and this comment is from the post author
-            if (isAnonymous && comment.username === postAuthor) {
-              // Only show real username to the author or admins
-              if (userRole === "admin" || username === postAuthor) {
-                displayName = `${comment.username} <span class="anonymous-badge">Anonymous</span>`;
-              } else {
-                displayName = "Anonymous";
-              }
-            }
-            
-            const commentElement = document.createElement('div');
-            commentElement.className = 'comment-item';
-            commentElement.innerHTML = `
-              <div class="comment-header">
-                <span class="comment-author">${displayName}</span>
-                <span class="comment-time">${comment.time_ago}</span>
-              </div>
-              <p class="comment-text">${comment.content}</p>
-            `;
-            commentsContainer.appendChild(commentElement);
-          });
-        } else {
-          noCommentsMessage.style.display = 'block';
-        }
-      } catch (err) {
-        console.error("Error loading comments:", err);
-      }
-    }
-
-    async function submitComment(postId, content) {
-      try {
-        const response = await fetch(`/api/comment/${postId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            content: content,
-            username: username,
-            post_id: postId
-          })
+        const upvoteRes = await fetch(`/api/upvote/${postId}?username=${username}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
         });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Failed to post comment");
+        if (upvoteRes.ok) {
+          const result = await upvoteRes.json();
+          console.log(result.message);
+            
+          // Toggle the upvote status
+          upvoteStatus[postId] = !isUpvoted;
+          
+          // Update the button appearance
+          if (!isUpvoted) {
+            // User just upvoted
+            e.target.classList.add("upvoted");
+            e.target.classList.remove("btn-outline-success");
+            e.target.textContent = "Upvoted";
+            
+            // Increment the count
+            const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
+            const currentCount = parseInt(countElement.textContent.replace("⬆ ", ""));
+            countElement.textContent = `⬆ ${currentCount + 1}`;
+          } else {
+            // User just removed upvote
+            e.target.classList.remove("upvoted");
+            e.target.classList.add("btn-outline-success");
+            e.target.textContent = "Upvote";
+            
+            // Decrement the count
+            const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
+            const currentCount = parseInt(countElement.textContent.replace("⬆ ", ""));
+            countElement.textContent = `⬆ ${currentCount - 1}`;
+          }
         }
+      } catch (err) {
+        console.error("Upvote failed:", err);
+      }
+    });
+  });
 
-        // Reload comments to show the new one
+  document.querySelectorAll(".comment-button").forEach(button => {
+    button.addEventListener("click", async (e) => {
+      const postId = e.target.dataset.id;
+      currentPostId = postId;
+      
+      // Find the post card to get its title and content
+      const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
+      if (postCard) {
+        // Set post details in the modal
+        document.getElementById('modal-post-title').textContent = postCard.dataset.title;
+        document.getElementById('modal-post-content').textContent = postCard.dataset.content;
+        document.getElementById('comment-post-id').value = postId;
+        
+        // Load comments
         await loadComments(postId);
         
-        // Update comment count in the UI
-        await updateCommentCount(postId);
-        
-        return true;
-      } catch (err) {
-        console.error("Error submitting comment:", err);
-        return false;
+        // Show the modal
+        commentModal.show();
       }
-    }
+    });
+  });
 
-    async function updateCommentCount(postId) {
-      try {
-        const postRes = await fetch(`/api/posts/${postId}`);
-        if (postRes.ok) {
-          const detailed = await postRes.json();
-          const countElement = document.querySelector(`.comment-count[data-id="${postId}"]`);
-          if (countElement) {
-            countElement.textContent = `💬 ${detailed.post.comments}`;
-          }
-        }
-      } catch (err) {
-        console.error("Error updating comment count:", err);
-      }
-    }
-
-    async function updatePost(postId, title, content) {
-      try {
-        const response = await fetch(`/api/post/${postId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            title: title,
-            content: content
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Failed to update post");
-        }
-
-        const result = await response.json();
-        return result;
-      } catch (err) {
-        console.error("Error updating post:", err);
-        return { success: false, message: err.message };
-      }
-    }
-
-    async function deletePost(postId) {
-      try {
-        const response = await fetch(`/api/post/${postId}`, {
-          method: 'DELETE'
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Failed to delete post");
-        }
-
-        const result = await response.json();
-        return result;
-      } catch (err) {
-        console.error("Error deleting post:", err);
-        return { success: false, message: err.message };
-      }
-    }
-
-    function attachPostActions() {
-      document.querySelectorAll(".upvote-button").forEach(button => {
-        button.addEventListener("click", async (e) => {
-          const postId = e.target.dataset.id;
-          const isUpvoted = upvoteStatus[postId] || false;
-          
-          try {
-            const upvoteRes = await fetch(`/api/upvote/${postId}?username=${username}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" }
-            });
-
-            if (upvoteRes.ok) {
-              const result = await upvoteRes.json();
-              console.log(result.message);
-                
-              // Toggle the upvote status
-              upvoteStatus[postId] = !isUpvoted;
-              
-              // Update the button appearance
-              if (!isUpvoted) {
-                // User just upvoted
-                e.target.classList.add("upvoted");
-                e.target.classList.remove("btn-outline-success");
-                e.target.textContent = "Upvoted";
-                
-                // Increment the count
-                const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
-                const currentCount = parseInt(countElement.textContent.replace("⬆ ", ""));
-                countElement.textContent = `⬆ ${currentCount + 1}`;
-              } else {
-                // User just removed upvote
-                e.target.classList.remove("upvoted");
-                e.target.classList.add("btn-outline-success");
-                e.target.textContent = "Upvote";
-                
-                // Decrement the count
-                const countElement = document.querySelector(`.upvote-count[data-id="${postId}"]`);
-                const currentCount = parseInt(countElement.textContent.replace("⬆ ", ""));
-                countElement.textContent = `⬆ ${currentCount - 1}`;
-              }
-            }
-          } catch (err) {
-            console.error("Upvote failed:", err);
-          }
-        });
-      });
-
-      document.querySelectorAll(".comment-button").forEach(button => {
-        button.addEventListener("click", async (e) => {
-          const postId = e.target.dataset.id;
-          currentPostId = postId;
-          
-          // Find the post card to get its title and content
-          const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
-          if (postCard) {
-            // Set post details in the modal
-            document.getElementById('modal-post-title').textContent = postCard.dataset.title;
-            document.getElementById('modal-post-content').textContent = postCard.dataset.content;
-            document.getElementById('comment-post-id').value = postId;
-            
-            // Load comments
-            await loadComments(postId);
-            
-            // Show the modal
-            commentModal.show();
-          }
-        });
-      });
-
-      // Attach edit action
-      document.querySelectorAll(".dropdown-item.edit").forEach(item => {
-        item.addEventListener("click", async (e) => {
-          e.preventDefault();
-          const postId = e.target.closest('.dropdown-item').dataset.id;
-          const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
-          
-          if (postCard) {
-            // Populate the edit modal with post data
-            document.getElementById('edit-post-id').value = postId;
-            document.getElementById('edit-title').value = postCard.dataset.title;
-            document.getElementById('edit-content').value = postCard.dataset.content;
-            
-            // Show the edit modal
-            editModal.show();
-          }
-        });
-      });
-
-      // Attach delete action
-      document.querySelectorAll(".dropdown-item.delete").forEach(item => {
-        item.addEventListener("click", async (e) => {
-          e.preventDefault();
-          const postId = e.target.closest('.dropdown-item').dataset.id;
-          
-          // Set the post ID for deletion
-          document.getElementById('delete-post-id').value = postId;
-          
-          // Show the delete confirmation modal
-          deleteModal.show();
-        });
-      });
-    }
-
-    // Handle comment form submission
-    document.getElementById('comment-form').addEventListener('submit', async (e) => {
+  // Attach edit action
+  document.querySelectorAll(".dropdown-item.edit").forEach(item => {
+    item.addEventListener("click", async (e) => {
       e.preventDefault();
+      // Get the closest .dropdown-item element (could be the icon or text inside)
+      const dropdownItem = e.target.closest('.dropdown-item');
+      if (!dropdownItem) return;
       
-      const postId = document.getElementById('comment-post-id').value;
-      const content = document.getElementById('comment-content').value.trim();
+      const postId = dropdownItem.dataset.id;
+      const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
       
-      if (!content) {
-        alert('Please enter a comment');
-        return;
-      }
-      
-      const submitted = await submitComment(postId, content);
-      if (submitted) {
-        // Clear the form
-        document.getElementById('comment-content').value = '';
+      if (postCard) {
+        // Populate the edit modal with post data
+        document.getElementById('edit-post-id').value = postId;
+        document.getElementById('edit-title').value = postCard.dataset.title;
+        document.getElementById('edit-content').value = postCard.dataset.content;
+        
+        // Show the edit modal
+        editModal.show();
       }
     });
+  });
 
-    // Handle edit form submission
-    document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  // Attach delete action
+  document.querySelectorAll(".dropdown-item.delete").forEach(item => {
+    item.addEventListener("click", async (e) => {
       e.preventDefault();
+      // Get the closest .dropdown-item element (could be the icon or text inside)
+      const dropdownItem = e.target.closest('.dropdown-item');
+      if (!dropdownItem) return;
       
-      const postId = document.getElementById('edit-post-id').value;
-      const title = document.getElementById('edit-title').value.trim();
-      const content = document.getElementById('edit-content').value.trim();
+      const postId = dropdownItem.dataset.id;
       
-      if (!title || !content) {
-        alert('Title and content are required');
-        return;
-      }
+      // Set the post ID for deletion
+      document.getElementById('delete-post-id').value = postId;
       
-      const result = await updatePost(postId, title, content);
-      if (result.message === "Post updated successfully") {
-        // Close the modal
-        editModal.hide();
-        
-        // Reload posts to show the updated one
-        const status = document.getElementById("status").value;
-        const sort = document.getElementById("sort").value;
-        await loadPosts(status, sort);
-        
-        // Show success message
-        alert('Post updated successfully');
-      } else {
-        alert('Failed to update post');
-      }
+      // Show the delete confirmation modal
+      deleteModal.show();
+    });
+  });
+}
+
+// Handle delete confirmation
+document.getElementById('confirm-delete').addEventListener('click', async () => {
+  const postId = document.getElementById('delete-post-id').value;
+  
+  try {
+    const response = await fetch(`/api/post/${postId}`, {
+      method: 'DELETE'
     });
 
-    // Handle delete confirmation
-    document.getElementById('confirm-delete').addEventListener('click', async () => {
-      const postId = document.getElementById('delete-post-id').value;
-      
-      const result = await deletePost(postId);
-      if (result.message === "Post deleted successfully") {
-        // Close the modal
-        deleteModal.hide();
-        
-        // Reload posts to show the updated list
-        const status = document.getElementById("status").value;
-        const sort = document.getElementById("sort").value;
-        await loadPosts(status, sort);
-        
-        // Show success message
-        alert('Post deleted successfully');
-      } else {
-        alert('Failed to delete post');
-      }
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to delete post");
+    }
+
+    const result = await response.json();
+    
+    // Close the modal
+    deleteModal.hide();
+    
+    // Reload posts to show the updated list
+    const status = document.getElementById("status").value;
+    const sort = document.getElementById("sort").value;
+    await loadPosts(status, sort);
+    
+    // Show success message
+    alert('Post deleted successfully');
+  } catch (err) {
+    console.error("Error deleting post:", err);
+    alert(`Failed to delete post: ${err.message}`);
+  }
+});
+
+// Handle edit form submission
+document.getElementById('edit-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const postId = document.getElementById('edit-post-id').value;
+  const title = document.getElementById('edit-title').value.trim();
+  const content = document.getElementById('edit-content').value.trim();
+  
+  if (!title || !content) {
+    alert('Title and content are required');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/post/${postId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: title,
+        content: content
+      })
     });
 
-    document.getElementById("status").addEventListener("change", () => {
-      const status = document.getElementById("status").value;
-      const sort = document.getElementById("sort").value;
-      loadPosts(status, sort);
-    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to update post");
+    }
 
-    document.getElementById("sort").addEventListener("change", () => {
-      const status = document.getElementById("status").value;
-      const sort = document.getElementById("sort").value;
-      loadPosts(status, sort);
-    });
+    const result = await response.json();
+    
+    // Close the modal
+    editModal.hide();
+    
+    // Reload posts to show the updated one
+    const status = document.getElementById("status").value;
+    const sort = document.getElementById("sort").value;
+    await loadPosts(status, sort);
+    
+    // Show success message
+    alert('Post updated successfully');
+  } catch (err) {
+    console.error("Error updating post:", err);
+    alert(`Failed to update post: ${err.message}`);
+  }
+});
 
-    // Initial load
-    loadPosts();
+// Initial load
+document.addEventListener('DOMContentLoaded', function() {
+  loadPosts();
+  
+  // Add event listeners for filter changes
+  document.getElementById("status").addEventListener("change", () => {
+    const status = document.getElementById("status").value;
+    const sort = document.getElementById("sort").value;
+    loadPosts(status, sort);
+  });
+
+  document.getElementById("sort").addEventListener("change", () => {
+    const status = document.getElementById("status").value;
+    const sort = document.getElementById("sort").value;
+    loadPosts(status, sort);
+  });
+});
   </script>
 </body>
 </html>
