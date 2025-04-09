@@ -10,3 +10,7 @@ class CommentBase(BaseModel):
     content : str
     username : str
     post_id : str 
+
+class PostUpdate(BaseModel):
+    title : str 
+    content : str 

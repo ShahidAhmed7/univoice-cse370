@@ -232,7 +232,41 @@ def get_comments(post_id):
         return comments
     
 
+def update_post(post_id, new_title, new_content):
+    with engine.connect() as conn:
+        trans = conn.begin()
+        try:
+            query = text("""
+                UPDATE posts
+                SET title = :title,
+                    content = :content
+                WHERE id = :post_id
+            """)
+            conn.execute(query, {
+                "title": new_title,
+                "content": new_content,
+                "post_id": post_id
+            })
+            trans.commit()
+            print("Post updated successfully")
+            return True
+        except Exception as e:
+            trans.rollback()
+            print(" Failed to update post:", e)
+            return False
 
-        
-        
 
+def delete_post(post_id):
+    with engine.connect() as conn:
+        trans = conn.begin()
+        try:
+            query = text("DELETE FROM posts WHERE id = :post_id")
+            conn.execute(query, {"post_id": post_id})
+            trans.commit()
+            print("Post deleted successfully")
+            return True
+        except Exception as e:
+            trans.rollback()
+            print("Failed to delete post:", e)
+            return False   
+        
