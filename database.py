@@ -8,7 +8,14 @@ from uuid import UUID
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
+from sqlalchemy.pool import QueuePool
+
+from sqlalchemy.pool import NullPool
+
+
+
+engine = create_engine(DATABASE_URL, poolclass=NullPool)
+
 
 def create_user(name,username,password_hash,email,role):
     with engine.connect() as conn:

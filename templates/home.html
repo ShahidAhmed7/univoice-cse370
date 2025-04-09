@@ -544,7 +544,7 @@ async function loadComments(postId) {
         commentEl.innerHTML = `
           <div class="comment-header">
             <span class="comment-author">${comment.username}</span>
-            <span class="comment-time">${comment.created_at}</span>
+            <span class="comment-time">${comment.time_ago}</span>
           </div>
           <p class="comment-text">${comment.content}</p>
         `;
