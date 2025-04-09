@@ -65,6 +65,46 @@
       color: white;
       border-color: #059669;
     }
+
+    /* Comment section styles */
+    .comment-item {
+      padding: 12px 15px;
+      border-radius: 8px;
+      background-color: #F9FAFB;
+      margin-bottom: 10px;
+    }
+
+    .comment-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+    }
+
+    .comment-author {
+      font-weight: 600;
+      color: #4F46E5;
+    }
+
+    .comment-time {
+      color: #6B7280;
+    }
+
+    .comment-text {
+      font-size: 0.95rem;
+      margin-bottom: 0;
+    }
+
+    .comment-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .no-comments-message {
+      text-align: center;
+      color: #6B7280;
+      padding: 20px;
+    }
   </style>
 </head>
 <body>
@@ -105,6 +145,43 @@
     <div id="posts-container"></div>
   </div>
 
+  <!-- Comment Modal -->
+  <div class="modal fade" id="commentModal" tabindex="-1" aria-labelledby="commentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="commentModalLabel">Comments</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="post-details" class="mb-4">
+            <h5 id="modal-post-title"></h5>
+            <p id="modal-post-content" class="text-muted"></p>
+            <hr>
+          </div>
+          
+          <div class="comment-list mb-4" id="comments-container">
+            <!-- Comments will be loaded here -->
+            <div class="no-comments-message" id="no-comments-message">
+              <p>No comments yet. Be the first to comment!</p>
+            </div>
+          </div>
+          
+          <form id="comment-form">
+            <input type="hidden" id="comment-post-id">
+            <div class="mb-3">
+              <label for="comment-content" class="form-label">Add a comment</label>
+              <textarea class="form-control" id="comment-content" rows="3" placeholder="Write your comment here..."></textarea>
+            </div>
+            <div class="d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary">Post Comment</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     document.getElementById("logout").addEventListener("click", async () => {
@@ -119,6 +196,10 @@
     // Store upvote status for all posts
     const upvoteStatus = {};
     const username = "{{ username }}";
+
+    // Comment modal instance
+    const commentModal = new bootstrap.Modal(document.getElementById('commentModal'));
+    let currentPostId = null;
 
     async function checkUpvoteStatus(postId) {
       try {
@@ -139,6 +220,8 @@
       const card = document.createElement("div");
       card.classList.add("post-card");
       card.dataset.id = post.id;
+      card.dataset.title = post.title;
+      card.dataset.content = post.content;
 
       // Store the upvote status in our tracking object
       upvoteStatus[post.id] = hasUpvoted;
@@ -156,7 +239,7 @@
           <div>
             <span class="badge bg-secondary status-badge">${post.status}</span>
             <span class="badge bg-success ms-2 upvote-count" data-id="${post.id}">⬆ ${post.upvotes}</span>
-            <span class="badge bg-info text-dark ms-2">💬 ${post.comments}</span>
+            <span class="badge bg-info text-dark ms-2 comment-count" data-id="${post.id}">💬 ${post.comments}</span>
           </div>
           <small class="post-meta">Posted by <strong>${post.username}</strong> • ${post.time_ago}</small>
         </div>
@@ -194,6 +277,91 @@
         attachPostActions();
       } catch (err) {
         console.error("Error loading posts:", err);
+      }
+    }
+
+    async function loadComments(postId) {
+      try {
+        const response = await fetch(`/api/comments/${postId}`);
+        if (!response.ok) {
+          throw new Error("Failed to load comments");
+        }
+        
+        const data = await response.json();
+        const commentsContainer = document.getElementById("comments-container");
+        const noCommentsMessage = document.getElementById("no-comments-message");
+        
+        // Clear previous comments
+        commentsContainer.innerHTML = '';
+        
+        if (data.comments && data.comments.length > 0) {
+          noCommentsMessage.style.display = 'none';
+          
+          data.comments.forEach(comment => {
+            const commentElement = document.createElement('div');
+            commentElement.className = 'comment-item';
+            commentElement.innerHTML = `
+              <div class="comment-header">
+                <span class="comment-author">${comment.username}</span>
+                <span class="comment-time">${comment.time_ago}</span>
+              </div>
+              <p class="comment-text">${comment.content}</p>
+            `;
+            commentsContainer.appendChild(commentElement);
+          });
+        } else {
+          commentsContainer.appendChild(noCommentsMessage);
+          noCommentsMessage.style.display = 'block';
+        }
+      } catch (err) {
+        console.error("Error loading comments:", err);
+      }
+    }
+
+    async function submitComment(postId, content) {
+      try {
+        const response = await fetch(`/api/comment/${postId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            content: content,
+            username: username,
+            post_id: postId
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || "Failed to post comment");
+        }
+
+        // Reload comments to show the new one
+        await loadComments(postId);
+        
+        // Update comment count in the UI
+        updateCommentCount(postId);
+        
+        return true;
+      } catch (err) {
+        console.error("Error submitting comment:", err);
+        return false;
+      }
+    }
+
+    async function updateCommentCount(postId) {
+      try {
+        const postRes = await fetch(`/api/posts/${postId}`);
+        if (postRes.ok) {
+          const detailed = await postRes.json();
+          const countElement = document.querySelector(`.comment-count[data-id="${postId}"]`);
+          if (countElement) {
+            countElement.textContent = `💬 ${detailed.post.comments}`;
+          }
+        }
+      } catch (err) {
+        console.error("Error updating comment count:", err);
       }
     }
 
@@ -246,12 +414,46 @@
       });
 
       document.querySelectorAll(".comment-button").forEach(button => {
-        button.addEventListener("click", (e) => {
+        button.addEventListener("click", async (e) => {
           const postId = e.target.dataset.id;
-          console.log("Comment clicked for:", postId);
+          currentPostId = postId;
+          
+          // Find the post card to get its title and content
+          const postCard = document.querySelector(`.post-card[data-id="${postId}"]`);
+          if (postCard) {
+            // Set post details in the modal
+            document.getElementById('modal-post-title').textContent = postCard.dataset.title;
+            document.getElementById('modal-post-content').textContent = postCard.dataset.content;
+            document.getElementById('comment-post-id').value = postId;
+            
+            // Load comments
+            await loadComments(postId);
+            
+            // Show the modal
+            commentModal.show();
+          }
         });
       });
     }
+
+    // Handle comment form submission
+    document.getElementById('comment-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const postId = document.getElementById('comment-post-id').value;
+      const content = document.getElementById('comment-content').value.trim();
+      
+      if (!content) {
+        alert('Please enter a comment');
+        return;
+      }
+      
+      const submitted = await submitComment(postId, content);
+      if (submitted) {
+        // Clear the form
+        document.getElementById('comment-content').value = '';
+      }
+    });
 
     document.getElementById("status").addEventListener("change", () => {
       const status = document.getElementById("status").value;
@@ -269,4 +471,3 @@
   </script>
 </body>
 </html>
-

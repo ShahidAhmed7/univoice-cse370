@@ -54,7 +54,7 @@ def get_post(post_id: str):
             return JSONResponse(status_code=200, content={"post": post})
         return JSONResponse(status_code=404, content={"message": "Post not found"})
     except Exception as e:
-        print("🔥 API error:", e)
+        print(" API error:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -92,7 +92,7 @@ def upvote_toggle(post_id: str, username: str = Query(...)):
         return JSONResponse(status_code=200, content={"message": "Upvoted"})
 
                            
-@router.post("api/comment/{post_id}")
+@router.post("/api/comment/{post_id}")
 def comment(comment : CommentBase):
     post_id = UUID(comment.post_id)
     user_id = get_user_id(comment.username)

@@ -197,8 +197,8 @@ def has_user_upvoted(post_id, username):
     return has_upvoted(post_id, user_id)
 
 def insert_comment(content, post_id, user_id):
-    with engine.connect as conn:
-        trans = engine.begin()
+    with engine.connect() as conn:
+        trans = conn.begin()
         try : 
             result = conn.execute(text("""
                 INSERT INTO comments (content, post_id, user_id)
