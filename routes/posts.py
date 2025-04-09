@@ -1,5 +1,5 @@
 from schemas.post import PostBase, CommentBase
-
+from utils import serializer
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from database import insert_post, get_all_posts, get_post_by_id,get_user_id
@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.post("/api/new-post")
 def new_post(post : PostBase):
-    add_to_db = insert_post(post.username,post.title,post.content)
+    add_to_db = insert_post(post.username,post.title,post.content,post.is_anonymous)
     if add_to_db:
         return JSONResponse(
             status_code = 201,

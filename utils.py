@@ -37,82 +37,34 @@ def format_time_ago(created_at):
         return f"{int(days)} day(s) ago"
 
 def helper_query(status, sort):
+    base_select = """
+        SELECT 
+            posts.id,
+            posts.title,
+            posts.content,
+            posts.status,
+            posts.is_anonymous,
+            posts.created_at,
+            users.username,
+            COUNT(DISTINCT upvotes.id) AS upvotes,
+            COUNT(DISTINCT comments.id) AS comments
+        FROM posts
+        JOIN users ON posts.user_id = users.id
+        LEFT JOIN upvotes ON upvotes.post_id = posts.id
+        LEFT JOIN comments ON comments.post_id = posts.id
+    """
+
+    base_group = "GROUP BY posts.id, posts.title, posts.content, posts.status, posts.is_anonymous, posts.created_at, users.username"
+
     if status is None:
         if sort == "latest":
-            query = """
-                SELECT 
-                    posts.id,
-                    posts.title,
-                    posts.content,
-                    posts.status,
-                    posts.created_at,
-                    users.username,
-                    COUNT(DISTINCT upvotes.id) AS upvotes,
-                    COUNT(DISTINCT comments.id) AS comments
-                FROM posts
-                JOIN users ON posts.user_id = users.id
-                LEFT JOIN upvotes ON upvotes.post_id = posts.id
-                LEFT JOIN comments ON comments.post_id = posts.id
-                GROUP BY posts.id, users.username
-                ORDER BY posts.created_at DESC;
-            """
+            return f"{base_select} {base_group} ORDER BY posts.created_at DESC;"
         else:
-            query = """
-                SELECT 
-                    posts.id,
-                    posts.title,
-                    posts.content,
-                    posts.status,
-                    posts.created_at,
-                    users.username,
-                    COUNT(DISTINCT upvotes.id) AS upvotes,
-                    COUNT(DISTINCT comments.id) AS comments
-                FROM posts
-                JOIN users ON posts.user_id = users.id
-                LEFT JOIN upvotes ON upvotes.post_id = posts.id
-                LEFT JOIN comments ON comments.post_id = posts.id
-                GROUP BY posts.id, users.username
-                ORDER BY upvotes DESC;
-            """
+            return f"{base_select} {base_group} ORDER BY upvotes DESC;"
 
     elif status in ["pending", "eligible", "submitted"]:
+        where_clause = f"WHERE posts.status = '{status}'"
         if sort == "latest":
-            query = f"""
-                SELECT 
-                    posts.id,
-                    posts.title,
-                    posts.content,
-                    posts.status,
-                    posts.created_at,
-                    users.username,
-                    COUNT(DISTINCT upvotes.id) AS upvotes,
-                    COUNT(DISTINCT comments.id) AS comments
-                FROM posts
-                JOIN users ON posts.user_id = users.id
-                LEFT JOIN upvotes ON upvotes.post_id = posts.id
-                LEFT JOIN comments ON comments.post_id = posts.id
-                WHERE posts.status = '{status}'
-                GROUP BY posts.id, users.username
-                ORDER BY posts.created_at DESC;
-            """
+            return f"{base_select} {where_clause} {base_group} ORDER BY posts.created_at DESC;"
         else:
-            query = f"""
-                SELECT 
-                    posts.id,
-                    posts.title,
-                    posts.content,
-                    posts.status,
-                    posts.created_at,
-                    users.username,
-                    COUNT(DISTINCT upvotes.id) AS upvotes,
-                    COUNT(DISTINCT comments.id) AS comments
-                FROM posts
-                JOIN users ON posts.user_id = users.id
-                LEFT JOIN upvotes ON upvotes.post_id = posts.id
-                LEFT JOIN comments ON comments.post_id = posts.id
-                WHERE posts.status = '{status}'
-                GROUP BY posts.id, users.username
-                ORDER BY upvotes DESC;
-            """
-
-    return query
+            return f"{base_select} {where_clause} {base_group} ORDER BY upvotes DESC;"

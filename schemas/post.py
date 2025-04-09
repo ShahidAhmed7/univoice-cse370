@@ -4,6 +4,7 @@ class PostBase(BaseModel):
     title : str 
     content : str 
     username : str
+    is_anonymous : bool
 
 class CommentBase(BaseModel):
     content : str

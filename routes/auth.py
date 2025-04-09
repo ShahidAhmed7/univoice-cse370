@@ -32,7 +32,16 @@ def login_user(user: UserLogin):
                 content= {"message": "Login successful. Directing to home page...",
                         "redirect_to": "/home"}
                 )
-            response.set_cookie("session", token, httponly=True, secure=True, samesite="Lax")
+            response.set_cookie(
+                key="session",
+                value=token,
+                httponly=True,
+                secure=True,
+                samesite="Lax",
+                path="/",
+                max_age=60 * 60 * 24  
+            )
+
             return response
         else: 
             return JSONResponse(

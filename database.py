@@ -1,4 +1,3 @@
-from datetime import datetime
 from sqlalchemy import create_engine,text
 from dotenv import load_dotenv
 import os
@@ -39,7 +38,7 @@ def get_user_data(username):
             return False 
         return result[0]
 
-def insert_post(username, title, content):
+def insert_post(username, title, content, is_anonymous=False):
     with engine.connect() as conn:
         trans = conn.begin()
         try:
@@ -52,23 +51,26 @@ def insert_post(username, title, content):
             user_id = user_result[0]  
 
             insert_query = text("""
-                INSERT INTO posts (user_id, title, content, status, created_at)
-                VALUES (:user_id, :title, :content, 'pending', NOW())
+                INSERT INTO posts (user_id, title, content, status, is_anonymous, created_at)
+                VALUES (:user_id, :title, :content, 'pending', :is_anonymous, NOW())
             """)
             conn.execute(insert_query, {
                 "user_id": user_id,
                 "title": title,
-                "content": content
+                "content": content,
+                "is_anonymous": is_anonymous
             })
 
             trans.commit()
-            print("You posted successfully")
+            print(" You posted successfully")
             return True
         
         except Exception as e:
             print(" Error inserting post:", e)
             trans.rollback()
             return False
+
+        
 def get_all_posts(status=None, sort="latest"):
     query = helper_query(status, sort)
     with engine.connect() as conn:
@@ -93,10 +95,6 @@ def get_all_posts(status=None, sort="latest"):
     return posts
 
 
-from uuid import UUID
-from sqlalchemy import text
-from utils import format_time_ago
-
 def get_post_by_id(post_id):
     try:
         post_id = UUID(post_id)
@@ -111,6 +109,7 @@ def get_post_by_id(post_id):
                 posts.title,
                 posts.content,
                 posts.status,
+                posts.is_anonymous,
                 posts.created_at,
                 users.username,
                 COALESCE(COUNT(DISTINCT upvotes.id), 0) AS upvotes,
@@ -120,7 +119,7 @@ def get_post_by_id(post_id):
             LEFT JOIN upvotes ON upvotes.post_id = posts.id
             LEFT JOIN comments ON comments.post_id = posts.id
             WHERE posts.id = :post_id
-            GROUP BY posts.id, posts.title, posts.content, posts.status, posts.created_at, users.username
+            GROUP BY posts.id, posts.title, posts.content, posts.status, posts.is_anonymous, posts.created_at, users.username
         """)
         result = conn.execute(query, {"post_id": post_id}).mappings().all()
 
@@ -128,11 +127,11 @@ def get_post_by_id(post_id):
         return False
 
     post_dict = dict(result[0])
-    
-    # Convert UUIDs to string
+
+    # Convert UUID to string
     post_dict["id"] = str(post_dict["id"])
 
-    # Format time ago
+    # Format time and remove created_at
     if "created_at" in post_dict:
         post_dict["time_ago"] = format_time_ago(post_dict["created_at"])
         post_dict.pop("created_at", None)
@@ -140,6 +139,7 @@ def get_post_by_id(post_id):
         post_dict["time_ago"] = "Unknown"
 
     return post_dict
+
 
 def get_user_id(username):
     with engine.connect() as conn:
