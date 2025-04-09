@@ -608,7 +608,22 @@ document.getElementById('edit-form').addEventListener('submit', async (e) => {
     alert(`Failed to update post: ${err.message}`);
   }
 });
-
+// Add this to your JavaScript in home.html
+document.getElementById("logout").addEventListener("click", async () => {
+  try {
+    const response = await fetch('/api/logout', {
+      method: 'POST'
+    });
+    
+    if (response.ok) {
+      window.location.href = '/login';
+    } else {
+      console.error("Logout failed");
+    }
+  } catch (err) {
+    console.error("Error during logout:", err);
+  }
+});
 // Initial load
 document.addEventListener('DOMContentLoaded', function() {
   loadPosts();
