@@ -162,9 +162,9 @@
           
           <div class="comment-list mb-4" id="comments-container">
             <!-- Comments will be loaded here -->
-            <div class="no-comments-message" id="no-comments-message">
-              <p>No comments yet. Be the first to comment!</p>
-            </div>
+          </div>
+          <div class="no-comments-message" id="no-comments-message">
+            <p>No comments yet. Be the first to comment!</p>
           </div>
           
           <form id="comment-form">
@@ -310,7 +310,6 @@
             commentsContainer.appendChild(commentElement);
           });
         } else {
-          commentsContainer.appendChild(noCommentsMessage);
           noCommentsMessage.style.display = 'block';
         }
       } catch (err) {
@@ -341,7 +340,7 @@
         await loadComments(postId);
         
         // Update comment count in the UI
-        updateCommentCount(postId);
+        await updateCommentCount(postId);
         
         return true;
       } catch (err) {
