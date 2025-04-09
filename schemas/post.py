@@ -5,3 +5,7 @@ class PostBase(BaseModel):
     content : str 
     username : str
 
+class CommentBase(BaseModel):
+    content : str
+    username : str
+    post_id : str 

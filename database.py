@@ -195,3 +195,44 @@ def has_user_upvoted(post_id, username):
         return False
     
     return has_upvoted(post_id, user_id)
+
+def insert_comment(content, post_id, user_id):
+    with engine.connect as conn:
+        trans = engine.begin()
+        try : 
+            result = conn.execute(text("""
+                INSERT INTO comments (content, post_id, user_id)
+                VALUES (:content, :post_id, :user_id)
+            """), { "content" : content,
+                "user_id" : user_id,
+                "post_id" : post_id})
+            trans.commit()
+            return True 
+        except Exception as e:
+            trans.rollback()
+            print("Error inserting comment:", e)
+            return False 
+        
+def get_comments(post_id):
+    #complete this function
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT comments.content, comments.created_at, users.username
+            FROM comments
+            JOIN users ON comments.user_id = users.id
+            WHERE comments.post_id = :post_id
+        """), {"post_id": post_id}).mappings().all()
+        comments = []
+        for row in result:
+            comment_dict = dict(row)
+            comment_dict["time_ago"] = format_time_ago(row["created_at"])
+            comment_dict.pop("created_at", None)
+            comments.append(comment_dict)
+
+        return comments
+    
+
+
+        
+        
+
