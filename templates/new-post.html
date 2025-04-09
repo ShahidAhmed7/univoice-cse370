@@ -55,6 +55,12 @@
     right: 20px;
     z-index: 1055;
   }
+  
+  /* Anonymous checkbox styling */
+  .form-check-input:checked {
+    background-color: #4F46E5;
+    border-color: #4F46E5;
+  }
 </style>
 {% endblock %}
 
@@ -71,6 +77,15 @@
     <div class="form-floating mb-4">
       <textarea id="content" name="content" class="form-control" placeholder="Write your issue..." required></textarea>
       <label for="content">Post Content</label>
+    </div>
+    
+    <!-- Anonymous option -->
+    <div class="form-check mb-4">
+      <input class="form-check-input" type="checkbox" id="is-anonymous" name="is_anonymous">
+      <label class="form-check-label" for="is-anonymous">
+        Post anonymously
+        <small class="text-muted ms-2">(Your name will be hidden from other students)</small>
+      </label>
     </div>
 
     <div class="d-grid">
@@ -95,6 +110,7 @@
 {% block scripts %}
 <script>
   const username = "{{ username }}";
+  const userRole = "{{ role }}";
 
   const toastElement = document.getElementById('toast');
   const toastMessage = document.getElementById('toast-message');
@@ -113,6 +129,7 @@
       username: username,
       title: document.getElementById("title").value.trim(),
       content: document.getElementById("content").value.trim(),
+      is_anonymous: document.getElementById("is-anonymous").checked
     };
 
     if (!data.title || !data.content) {
@@ -147,5 +164,4 @@
   });
 </script>
 {% endblock %}
-
 
