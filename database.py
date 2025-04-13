@@ -8,7 +8,6 @@ from uuid import UUID
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-from sqlalchemy.pool import QueuePool
 
 from sqlalchemy.pool import NullPool
 

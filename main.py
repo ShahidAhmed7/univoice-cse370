@@ -40,19 +40,19 @@ def display_home(request: Request):
     if not session:
         return RedirectResponse("/login")
     
-    try :
+    try:
         data = serializer.loads(session)
         username = data.get("username")
-        print(username)
+        print(f"Decoded session for user: {username}")
         role = data.get("role")
 
         return templates.TemplateResponse("home.html",
-                {"request" : request, 
+                {"request": request, 
                  "username": username, 
-                 "role" : role})
+                 "role": role})
     
     except Exception as e:
-        print("Invalid session:", e)
+        print(f"Session decode error: {e}")
         return RedirectResponse("/login")
     
     
